@@ -98,6 +98,8 @@ También puedes publicar solo las reglas con Firebase CLI si lo tienes instalado
 
 El panel aparece en cuanto Firebase verifica la cuenta; los botones para guardar se habilitan cuando termina de cargar Firestore. El estado superior muestra la cuenta conectada. Al agregar un colaborador, el mensaje confirma si quedó guardado en Firebase o solo en este dispositivo. Si aparece un error de permisos, publica las reglas de Firestore antes de volver a guardar.
 
+Si Firestore no confirma una escritura en 15 segundos, la aplicación mostrará un aviso; una operación sin respuesta podría finalizar más tarde, por lo que conviene recargar y verificar la planilla antes de volver a intentarla. En Firestore → Data, busca `users`, abre el documento cuyo ID es el UID de la cuenta en **Authentication → Users** y, dentro de este, la subcolección `employees`. Los registros de horarios aparecen en `records`.
+
 Si ya tenías información guardada localmente, expórtala primero y consérvala: no se copia automáticamente a Firestore al conectar Firebase.
 
 ## Planilla y exportación

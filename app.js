@@ -6,6 +6,7 @@
   const firebaseKeys = ["apiKey", "authDomain", "projectId", "appId"];
   const firebaseEnabled = firebaseKeys.every((key) => Boolean(appConfig[key]));
   const firebasePartiallyConfigured = firebaseKeys.some((key) => Boolean(appConfig[key])) && !firebaseEnabled;
+  const FIRESTORE_WRITE_TIMEOUT_MS = 15000;
   const state = {
     employees: [],
     records: [],
@@ -26,6 +27,20 @@
     return `${year}-${month}-${day}`;
   }
 
+  function withFirestoreWriteTimeout(writePromise) {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = window.setTimeout(() => {
+        const error = new Error(
+          "Firestore no confirmó el guardado en 15 segundos. La operación podría terminar más tarde; revisa la planilla o recarga antes de intentar guardar otra vez."
+        );
+        error.code = "app/write-timeout";
+        reject(error);
+      }, FIRESTORE_WRITE_TIMEOUT_MS);
+    });
+    return Promise.race([writePromise, timeoutPromise]).finally(() => window.clearTimeout(timeoutId));
+  }
+
   function setMessage(element, text, isError = false) {
     element.textContent = text;
     element.classList.toggle("message-error", isError);
@@ -34,6 +49,7 @@
   function firebaseErrorMessage(error) {
     const errorCode = (error.code || "").replace(/^firestore\//, "");
     const messages = {
+      "app/write-timeout": error.message,
       "auth/email-already-in-use": "Ese correo ya tiene una cuenta. Usa Iniciar sesión.",
       "auth/invalid-credential": "Correo o contraseña incorrectos.",
       "auth/invalid-email": "El correo electrónico no es válido.",
@@ -79,7 +95,7 @@
   async function saveItem(collectionName, item) {
     if (!state.ready) throw new Error("Los datos no están disponibles. Recarga la página y verifica el almacenamiento.");
     if (firebaseEnabled) {
-      await collection(collectionName).doc(item.id).set(item);
+      await withFirestoreWriteTimeout(collection(collectionName).doc(item.id).set(item));
       return;
     }
     const updatedItems = state[collectionName].filter((current) => current.id !== item.id);
@@ -93,7 +109,7 @@
   async function removeItem(collectionName, id) {
     if (!state.ready) throw new Error("Los datos no están disponibles. Recarga la página y verifica el almacenamiento.");
     if (firebaseEnabled) {
-      await collection(collectionName).doc(id).delete();
+      await withFirestoreWriteTimeout(collection(collectionName).doc(id).delete());
       return;
     }
     const updatedItems = state[collectionName].filter((item) => item.id !== id);
@@ -592,7 +608,7 @@
         if (operation.type === "set") batch.set(reference, operation.record);
         else batch.delete(reference);
       });
-      await batch.commit();
+      await withFirestoreWriteTimeout(batch.commit());
     }
   }
 
@@ -878,6 +894,7 @@
       setDataControlsEnabled(false);
       render();
       setMessage(byId("matrix-message"), `No se pudieron leer los datos de Firebase: ${message}`, true);
+      setMessage(byId("employee-message"), `No se pudieron cargar los datos de Firebase: ${message}`, true);
       announce(`No se están sincronizando los cambios: ${message}`, true);
     };
 
