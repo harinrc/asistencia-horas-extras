@@ -917,6 +917,17 @@
     return (hours * 60 + minutes) / 1440;
   }
 
+  function summaryColumnName(columnNumber) {
+    let column = columnNumber;
+    let name = "";
+    while (column > 0) {
+      const remainder = (column - 1) % 26;
+      name = String.fromCharCode(65 + remainder) + name;
+      column = Math.floor((column - 1) / 26);
+    }
+    return name;
+  }
+
   function applyCellStyle(cell, { fill, color = "20312C", bold = false, size = 10, horizontal = "center" } = {}) {
     cell.font = { name: "Calibri", size, bold, color: { argb: `FF${color}` } };
     cell.alignment = { vertical: "middle", horizontal, wrapText: true };
@@ -929,14 +940,27 @@
     };
   }
 
-  function setExcelDuration(cell, minutes, isTotal = false, fill) {
-    cell.value = minutes / 1440;
+  function setExcelFormulaDuration(cell, formula, minutes, isTotal = false, fill) {
+    cell.value = { formula, result: minutes / 1440 };
     cell.numFmt = "[h]:mm";
     applyCellStyle(cell, {
       fill: fill || (isTotal ? "DCEEF6" : "DCEAF3"),
       color: "163F5B",
       bold: true
     });
+  }
+
+  function excelOvertimeFormula(startCell, endCell, date, additionalMinutes) {
+    const dateFormula = `DATE(${date.slice(0, 4)},${Number(date.slice(5, 7))},${Number(date.slice(8, 10))})`;
+    const endTime = `${endCell}+IF(${endCell}<=${startCell},1,0)`;
+    const regularOverlap = (dayOffset) => {
+      const day = `${dateFormula}+${dayOffset}`;
+      const overlap = (regularEnd) =>
+        `MAX(0,MIN(${endTime},${day}+${regularEnd}/24)-MAX(${startCell},${day}+8/24))`;
+      return `IF(WEEKDAY(${day},2)<=5,${overlap(17)},IF(WEEKDAY(${day},2)=6,${overlap(12)},0))`;
+    };
+    const additionalFormula = additionalMinutes ? `+${additionalMinutes}/1440` : "";
+    return `IF(AND(${startCell}<>"",${endCell}<>""),MAX(0,${endTime}-${startCell}-${regularOverlap(0)}-${regularOverlap(1)})${additionalFormula},${additionalMinutes}/1440)`;
   }
 
   function addSpreadsheetWorksheet(workbook, dates, periodLabel) {
@@ -998,7 +1022,7 @@
       employeesIncludingHistory().map((employee, index) => [employee.id, index + 1])
     );
     const employeeStartRow = 6;
-    let grandTotal = 0;
+    const employeeTotals = [];
     employees.forEach((employee, employeeIndex) => {
       const rowNumber = employeeStartRow + employeeIndex;
       const rowFill = employeeIndex % 2 === 0 ? "FFFFFF" : "F7FAF8";
@@ -1012,12 +1036,17 @@
       roleCell.value = employee.role;
       applyCellStyle(roleCell, { fill: rowFill, horizontal: "left" });
       let employeeTotal = 0;
+      const dailyTotalCells = [];
       dates.forEach((date, index) => {
         const column = 5 + index * 3;
         const dayRecords = recordsForDay(employee.id, date);
         const record = dayRecords[0];
         const dayMinutes = minutesForDay(employee.id, date);
         employeeTotal += dayMinutes;
+        const startAddress = worksheet.getCell(rowNumber, column).address;
+        const endAddress = worksheet.getCell(rowNumber, column + 1).address;
+        const additionalMinutes = dayRecords.slice(1)
+          .reduce((sum, item) => sum + calculateOvertimeMinutes(item), 0);
         const startCell = worksheet.getCell(rowNumber, column);
         startCell.value = record ? excelTime(record.start) : null;
         if (record) startCell.numFmt = "h:mm AM/PM";
@@ -1027,10 +1056,24 @@
         if (record) endCell.numFmt = "h:mm AM/PM";
         applyCellStyle(endCell, { fill: rowFill });
         const totalCell = worksheet.getCell(rowNumber, column + 2);
-        setExcelDuration(totalCell, dayMinutes);
+        setExcelFormulaDuration(
+          totalCell,
+          excelOvertimeFormula(startAddress, endAddress, date, additionalMinutes),
+          dayMinutes
+        );
+        if (dayRecords.length > 1) {
+          totalCell.note = `Incluye ${dayRecords.length - 1} turno(s) adicional(es) guardado(s), además del horario visible.`;
+        }
+        dailyTotalCells.push(totalCell.address);
       });
-      grandTotal += employeeTotal;
-      setExcelDuration(worksheet.getCell(rowNumber, 4), employeeTotal, true, "CDE8C5");
+      employeeTotals.push(employeeTotal);
+      setExcelFormulaDuration(
+        worksheet.getCell(rowNumber, 4),
+        `SUM(${dailyTotalCells.join(",")})`,
+        employeeTotal,
+        true,
+        "CDE8C5"
+      );
     });
 
     const totalRowNumber = employeeStartRow + employees.length;
@@ -1038,22 +1081,32 @@
     const totalLabel = worksheet.getCell(totalRowNumber, 1);
     totalLabel.value = "TOTAL GENERAL";
     applyCellStyle(totalLabel, { fill: "173F36", color: "FFFFFF", bold: true, size: 11, horizontal: "left" });
-    setExcelDuration(worksheet.getCell(totalRowNumber, 4), grandTotal, true);
+    const grandTotal = employeeTotals.reduce((sum, total) => sum + total, 0);
+    setExcelFormulaDuration(
+      worksheet.getCell(totalRowNumber, 4),
+      employees.length ? `SUM(D${employeeStartRow}:D${totalRowNumber - 1})` : "0",
+      grandTotal,
+      true
+    );
     dates.forEach((date, index) => {
       const column = 5 + index * 3;
       worksheet.getCell(totalRowNumber, column).value = "";
       applyCellStyle(worksheet.getCell(totalRowNumber, column), { fill: "E8EFEB" });
       worksheet.getCell(totalRowNumber, column + 1).value = "";
       applyCellStyle(worksheet.getCell(totalRowNumber, column + 1), { fill: "E8EFEB" });
-      setExcelDuration(
+      const dayMinutes = employees.reduce((sum, employee) => sum + minutesForDay(employee.id, date), 0);
+      setExcelFormulaDuration(
         worksheet.getCell(totalRowNumber, column + 2),
-        employees.reduce((sum, employee) => sum + minutesForDay(employee.id, date), 0),
+        employees.length
+          ? `SUM(${employees.map((_, employeeIndex) => worksheet.getCell(employeeStartRow + employeeIndex, column + 2).address).join(",")})`
+          : "0",
+        dayMinutes,
         true
       );
     });
     worksheet.getRow(totalRowNumber).height = 27;
     worksheet.headerFooter.oddFooter = "&LControl de horas extras&C&H&Página &P de &N&R" + periodLabel;
-    return { worksheet, employees, grandTotal, employeeStartRow };
+    return { worksheet, employees, grandTotal, employeeStartRow, totalRowNumber };
   }
 
   async function exportWorkbook() {
@@ -1077,7 +1130,9 @@
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "Horas claras";
       workbook.created = new Date();
-      const { employees, grandTotal } = addSpreadsheetWorksheet(workbook, dates, periodLabel);
+      workbook.calcProperties = { fullCalcOnLoad: true, forceFullCalc: true, calcMode: "auto" };
+      const { employees, grandTotal, employeeStartRow, totalRowNumber } =
+        addSpreadsheetWorksheet(workbook, dates, periodLabel);
       const employeeNumbers = new Map(
         employeesIncludingHistory().map((employee, index) => [employee.id, index + 1])
       );
@@ -1095,7 +1150,7 @@
       applyCellStyle(summary.getCell("A2"), { fill: "EAF2ED", color: "36544A", bold: true, size: 11 });
       summary.getCell("A3").value = "TOTAL GENERAL";
       applyCellStyle(summary.getCell("A3"), { fill: "DCEEF6", bold: true });
-      setExcelDuration(summary.getCell("B3"), grandTotal, true);
+      setExcelFormulaDuration(summary.getCell("B3"), `Planilla!D${totalRowNumber}`, grandTotal, true);
       summary.mergeCells("B3:F3");
       summary.getCell("B3").alignment = { horizontal: "left", vertical: "middle", indent: 1 };
       const headers = ["N.º", "Colaborador", "Cargo", "Días con registro", "Turnos", "Horas extras"];
@@ -1106,17 +1161,41 @@
       });
       employees.forEach((employee, index) => {
         const row = 6 + index;
+        const planillaRow = employeeStartRow + index;
         const employeeRecords = state.records.filter((record) =>
           record.employeeId === employee.id && dates.includes(record.date)
         );
         const dayCount = new Set(employeeRecords.map((record) => record.date)).size;
         const minutes = employeeRecords.reduce((sum, record) => sum + calculateOvertimeMinutes(record), 0);
-        [employeeNumbers.get(employee.id), employee.name, employee.role, dayCount, employeeRecords.length].forEach((value, column) => {
-          const cell = summary.getCell(row, column + 1);
-          cell.value = value;
-          applyCellStyle(cell, { fill: index % 2 ? "F7FAF8" : "FFFFFF", horizontal: column > 2 ? "center" : "left" });
+        const dayCountTerms = [];
+        const turnCountTerms = [];
+        dates.forEach((date, dateIndex) => {
+          const recordsForCurrentDay = recordsForDay(employee.id, date);
+          const additionalTurns = Math.max(0, recordsForCurrentDay.length - 1);
+          const startAddress = `Planilla!${summaryColumnName(5 + dateIndex * 3)}${planillaRow}`;
+          const endAddress = `Planilla!${summaryColumnName(6 + dateIndex * 3)}${planillaRow}`;
+          dayCountTerms.push(
+            `IF(OR(${startAddress}<>"",${endAddress}<>"",${additionalTurns > 0 ? "TRUE" : "FALSE"}),1,0)`
+          );
+          turnCountTerms.push(`IF(AND(${startAddress}<>"",${endAddress}<>""),1,0)+${additionalTurns}`);
         });
-        setExcelDuration(summary.getCell(row, 6), minutes, true);
+        [
+          { value: employeeNumbers.get(employee.id), column: 1 },
+          { value: employee.name, column: 2 },
+          { value: employee.role, column: 3 }
+        ].forEach(({ value, column }) => {
+          const cell = summary.getCell(row, column);
+          cell.value = value;
+          applyCellStyle(cell, { fill: index % 2 ? "F7FAF8" : "FFFFFF", horizontal: "left" });
+        });
+        const formulaFill = index % 2 ? "F7FAF8" : "FFFFFF";
+        const dayCountCell = summary.getCell(row, 4);
+        dayCountCell.value = { formula: `SUM(${dayCountTerms.join(",")})`, result: dayCount };
+        applyCellStyle(dayCountCell, { fill: formulaFill });
+        const turnCountCell = summary.getCell(row, 5);
+        turnCountCell.value = { formula: `SUM(${turnCountTerms.join(",")})`, result: employeeRecords.length };
+        applyCellStyle(turnCountCell, { fill: formulaFill });
+        setExcelFormulaDuration(summary.getCell(row, 6), `Planilla!D${planillaRow}`, minutes, true);
       });
       summary.columns = [{ width: 7 }, { width: 34 }, { width: 24 }, { width: 22 }, { width: 14 }, { width: 18 }];
       summary.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5 + employees.length, column: 6 } };
@@ -1129,7 +1208,7 @@
       link.download = `reporte-horas-extras-${start}-a-${end}.xlsx`;
       link.click();
       URL.revokeObjectURL(url);
-      announce("Planilla de Excel con formato y resumen exportada correctamente.");
+      announce("Planilla de Excel con fórmulas, formato y resumen exportada correctamente.");
     } catch (error) {
       announce(`No se pudo crear el archivo de Excel: ${error.message}`, true);
     }

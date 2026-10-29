@@ -18,6 +18,7 @@ Los registros locales no se migran automáticamente a Firebase; configura Fireba
 - Se suman únicamente los minutos trabajados antes de la entrada regular y después de la salida regular.
 - El domingo no tiene horario regular definido; por tanto, todo el tiempo registrado ese día se considera extra.
 - Se permiten varios registros no traslapados por colaborador y fecha. Una salida anterior a la hora de entrada se interpreta como salida al día siguiente.
+- Los turnos que cruzan medianoche se calculan separando el tiempo trabajado antes y después de medianoche y aplicando el horario regular de cada fecha. El acumulado completo se asigna a la fecha en que inició el turno. Por ejemplo, de lunes 7:30 a. m. a martes 2:00 a. m. suma 9:30 horas extras: 0:30 antes de la jornada, 7:00 después de las 5:00 p. m. y 2:00 del martes.
 - El botón **Iniciar nuevo período** cambia la consulta al día actual; no elimina ni reinicia los registros anteriores.
 - Las fechas del período filtran por la fecha de entrada del turno. Los acumulados por colaborador, día y período se calculan a partir de esos registros.
 - Al abrir la aplicación, el período inicia en la fecha local de hoy. Para consultar más días, selecciona el rango de fechas deseado.
@@ -25,6 +26,7 @@ Los registros locales no se migran automáticamente a Firebase; configura Fireba
 - El domingo no tiene horario regular: se considera extra todo el tiempo del turno registrado ese día.
 - Los colaboradores nuevos se ordenan del más antiguo al más reciente según su fecha de creación. Los colaboradores agregados antes de incorporar este dato se mantienen arriba en el orden existente, ya que no cuentan con una fecha histórica de creación guardada.
 - La planilla y ambos reportes de Excel incluyen un número de colaborador; el orden sigue la antigüedad y no cambia al aplicar el buscador.
+- La exportación de Excel incluye fórmulas para el cálculo diario de horas extras y los acumulados de la planilla y el resumen. Si se edita una entrada o salida exportada, Excel recalcula sus totales; los turnos adicionales del mismo día que no aparecen en los dos campos visibles se conservan como parte fija del total.
 - Desde el directorio se puede editar el nombre y el cargo, activar/desactivar o eliminar al colaborador. **Eliminar · conservar historial** quita el perfil del directorio pero guarda las jornadas con una copia del nombre y cargo para que sigan apareciendo en los períodos históricos. **Eliminar todo** borra el perfil y todas sus jornadas de forma permanente, después de confirmarlo.
 
 ## Publicar en GitHub Pages
