@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123c35">
+  <title>Control de horas extras</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="firebase-config.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="Control de horas extras, inicio">
+      <span class="brand-mark" aria-hidden="true">HC</span>
+      <span><strong>Horas claras</strong><small>Control de horas extras</small></span>
+    </a>
+    <div class="topbar-actions">
+      <span id="storage-status" class="status-pill">Preparando...</span>
+      <button id="sign-out-button" class="button button-quiet hidden" type="button">Cerrar sesión</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <section id="auth-panel" class="auth-panel hidden" aria-labelledby="auth-heading">
+      <div class="auth-copy">
+        <p class="eyebrow">Acceso a tu espacio</p>
+        <h1 id="auth-heading">Controla las horas de tu equipo</h1>
+        <p>Inicia sesión o crea una cuenta para guardar tus datos de forma privada en Firebase.</p>
+      </div>
+      <form id="auth-form" class="auth-form">
+        <label for="auth-email">Correo electrónico</label>
+        <input id="auth-email" type="email" autocomplete="email" required>
+        <label for="auth-password">Contraseña</label>
+        <input id="auth-password" type="password" autocomplete="current-password" minlength="6" required>
+        <div class="auth-actions">
+          <button class="button button-primary" type="submit" name="auth-action" value="login">Iniciar sesión</button>
+          <button class="button button-secondary" type="submit" name="auth-action" value="register">Crear cuenta</button>
+        </div>
+        <p id="auth-message" class="form-message" role="status"></p>
+      </form>
+    </section>
+
+    <div id="app-content">
+      <section class="intro">
+        <div>
+          <p class="eyebrow">Panel de control</p>
+          <h1>Horas extras del equipo</h1>
+          <p class="intro-text">Registra entradas y salidas; el sistema calcula automáticamente el tiempo trabajado fuera del horario establecido.</p>
+        </div>
+        <div class="schedule-note">
+          <span class="schedule-icon" aria-hidden="true">◷</span>
+          <span><strong>Horario regular</strong><br>L–V 8:00 a. m.–5:00 p. m. · Sáb. 8:00 a. m.–12:00 p. m.</span>
+        </div>
+      </section>
+
+      <section class="period-panel panel" aria-labelledby="period-heading">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Consulta y exportación</p>
+            <h2 id="period-heading">Período de trabajo</h2>
+          </div>
+          <button id="new-period-button" class="button button-secondary" type="button">Iniciar nuevo período</button>
+        </div>
+        <div class="period-controls">
+          <label>Desde<input id="period-start" type="date"></label>
+          <label>Hasta<input id="period-end" type="date"></label>
+          <button id="export-button" class="button button-primary" type="button">Exportar a Excel</button>
+        </div>
+        <p class="helper-text">El historial se conserva al iniciar otro período. Puedes volver a consultar y exportar fechas anteriores.</p>
+      </section>
+
+      <section class="panel matrix-panel" aria-labelledby="matrix-heading">
+        <div class="panel-heading matrix-heading">
+          <div>
+            <p class="eyebrow">Planilla del período</p>
+            <h2 id="matrix-heading">Horario por colaborador y día</h2>
+            <p class="matrix-subtitle">Captura las entradas y salidas directamente en la tabla. El total de horas extras se calcula automáticamente.</p>
+          </div>
+          <div class="matrix-actions">
+            <span class="total-badge">Total del período <strong id="total-overtime">0:00</strong></span>
+            <button id="save-schedule-button" class="button button-primary" type="button">Guardar horarios</button>
+          </div>
+        </div>
+        <p id="matrix-message" class="form-message" role="status"></p>
+        <div class="spreadsheet-wrap">
+          <table id="schedule-table" class="schedule-table"></table>
+        </div>
+        <div class="spreadsheet-legend">
+          <span><i class="legend-swatch legend-input"></i>Entrada y salida</span>
+          <span><i class="legend-swatch legend-total"></i>Total de horas extras</span>
+          <span id="period-caption">Período seleccionado</span>
+        </div>
+      </section>
+
+      <section class="panel employee-panel employee-directory" aria-labelledby="employee-heading">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Personal</p>
+            <h2 id="employee-heading">Colaboradores y cargos</h2>
+          </div>
+        </div>
+        <form id="employee-form" class="employee-form">
+          <label>Nombre y apellidos<input id="employee-name" type="text" maxlength="100" placeholder="Ej. Ana López" required></label>
+          <label>Cargo<input id="employee-role" type="text" maxlength="80" placeholder="Ej. Conductora" required></label>
+          <button class="button button-primary" type="submit">Agregar colaborador</button>
+          <p id="employee-message" class="form-message" role="status"></p>
+        </form>
+        <div id="employee-list" class="employee-list"></div>
+      </section>
+
+      <p id="global-message" class="global-message" role="status"></p>
+      <footer>Las horas extras se calculan como el tiempo trabajado fuera del horario regular, antes de la entrada o después de la salida.</footer>
+    </div>
+  </main>
+</body>
+</html>
