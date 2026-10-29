@@ -16,7 +16,8 @@
     auth: null,
     listeners: [],
     ready: false,
-    saving: false
+    saving: false,
+    editingEmployeeId: null
   };
   const byId = (id) => document.getElementById(id);
   const dayNames = ["DOMINGO", "LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES", "SÁBADO"];
@@ -111,9 +112,27 @@
       .toLocaleLowerCase("es");
   }
 
+  function employeesIncludingHistory() {
+    const employeeIds = new Set(state.employees.map((employee) => employee.id));
+    const historyById = new Map();
+    state.records.forEach((record) => {
+      if (employeeIds.has(record.employeeId) || !record.employeeId) return;
+      if (!historyById.has(record.employeeId)) {
+        historyById.set(record.employeeId, {
+          id: record.employeeId,
+          name: record.employeeName || "Colaborador eliminado",
+          role: record.employeeRole || "Historial conservado",
+          createdAt: record.employeeCreatedAt || null,
+          archived: true
+        });
+      }
+    });
+    return employeesOldestFirst([...state.employees, ...historyById.values()]);
+  }
+
   function visibleEmployees() {
     const query = normalizeSearchText(byId("employee-search").value.trim());
-    const employees = employeesOldestFirst(state.employees);
+    const employees = employeesOldestFirst(state.employees.filter((employee) => !employee.archived));
     if (!query) return employees;
     return employees.filter((employee) =>
       normalizeSearchText(`${employee.name} ${employee.role}`).includes(query)
@@ -196,8 +215,10 @@
       await withFirestoreWriteTimeout(collection(collectionName).doc(item.id).set(item));
       return;
     }
-    const updatedItems = state[collectionName].filter((current) => current.id !== item.id);
-    updatedItems.push(item);
+    const currentItems = state[collectionName];
+    const updatedItems = currentItems.some((current) => current.id === item.id)
+      ? currentItems.map((current) => current.id === item.id ? item : current)
+      : [...currentItems, item];
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
       employees: collectionName === "employees" ? updatedItems : state.employees,
       records: collectionName === "records" ? updatedItems : state.records
@@ -327,7 +348,8 @@
     const container = byId("employee-list");
     container.replaceChildren();
     const employees = visibleEmployees();
-    byId("employee-search-count").textContent = `${employees.length} de ${state.employees.length} colaboradores`;
+    const activeEmployees = state.employees.filter((employee) => !employee.archived).length;
+    byId("employee-search-count").textContent = `${employees.length} de ${activeEmployees} colaboradores`;
     employees.forEach((employee) => {
       const item = document.createElement("div");
       item.className = "employee-item";
@@ -338,14 +360,22 @@
       const role = document.createElement("span");
       role.textContent = employee.role + (employee.active === false ? " · Inactivo" : "");
       details.append(name, role);
-      const button = document.createElement("button");
-      button.className = "text-button";
-      button.type = "button";
       const hasRecords = state.records.some((record) => record.employeeId === employee.id);
-      button.textContent = hasRecords ? (employee.active === false ? "Reactivar" : "Desactivar") : "Eliminar";
-      button.setAttribute("aria-label", `${button.textContent} a ${employee.name}`);
-      button.addEventListener("click", () => hasRecords ? toggleEmployee(employee) : deleteEmployee(employee));
-      item.append(details, button);
+      const actions = document.createElement("div");
+      actions.className = "employee-actions";
+      actions.append(
+        createEmployeeAction("Editar", () => beginEmployeeEdit(employee)),
+        createEmployeeAction(employee.active === false ? "Reactivar" : "Desactivar", () => toggleEmployee(employee))
+      );
+      if (hasRecords) {
+        actions.append(
+          createEmployeeAction("Eliminar · conservar historial", () => deleteEmployee(employee, false), "keep-history"),
+          createEmployeeAction("Eliminar todo", () => deleteEmployee(employee, true), "delete-all")
+        );
+      } else {
+        actions.append(createEmployeeAction("Eliminar", () => deleteEmployee(employee, true), "delete-all"));
+      }
+      item.append(details, actions);
       container.appendChild(item);
     });
     if (state.employees.length === 0) {
@@ -360,6 +390,15 @@
       container.appendChild(empty);
     }
     renderEmployeeSuggestions();
+  }
+
+  function createEmployeeAction(label, callback, actionClass = "") {
+    const button = document.createElement("button");
+    button.className = `text-button ${actionClass}`;
+    button.type = "button";
+    button.textContent = label;
+    button.addEventListener("click", callback);
+    return button;
   }
 
   function addTimeInput(row, employee, date, part, value, className) {
@@ -393,6 +432,7 @@
     const groupRow = document.createElement("tr");
     groupRow.className = "group-header";
     [
+      ["N.º", "sticky-number"],
       ["NOMBRES Y APELLIDOS", "sticky-name"],
       ["CARGO", "sticky-role"],
       ["TOTAL DE HORAS", "sticky-employee-total"]
@@ -427,10 +467,22 @@
     table.appendChild(header);
 
     const body = document.createElement("tbody");
-    const employees = visibleEmployees();
+    const searchText = normalizeSearchText(byId("employee-search").value.trim());
+    const visibleIds = new Set(visibleEmployees().map((employee) => employee.id));
+    const employees = employeesIncludingHistory().filter((employee) =>
+      visibleIds.has(employee.id) ||
+        employee.archived &&
+        state.records.some((record) => record.employeeId === employee.id && dates.includes(record.date)) &&
+        (!searchText || normalizeSearchText(`${employee.name} ${employee.role}`).includes(searchText))
+    );
+    const employeeNumbers = new Map(
+      employeesIncludingHistory().map((employee, index) => [employee.id, index + 1])
+    );
     employees.forEach((employee) => {
       const row = document.createElement("tr");
       if (employee.active === false) row.className = "inactive-row";
+      if (employee.archived) row.classList.add("archived-row");
+      createCell(row, String(employeeNumbers.get(employee.id)), "sticky-number employee-number-cell");
       createCell(row, employee.name, "sticky-name employee-name-cell");
       createCell(row, employee.role, "sticky-role");
       const totalCell = createCell(row, "", "sticky-employee-total employee-total-cell");
@@ -442,8 +494,13 @@
         const existingEnd = firstRecord?.end || "";
         const overtime = minutesForDay(employee.id, date);
         employeeTotal += overtime;
-        addTimeInput(row, employee, date, "start", existingStart, "time-cell");
-        addTimeInput(row, employee, date, "end", existingEnd, "time-cell");
+        if (employee.archived) {
+          createCell(row, firstRecord ? formatTime(firstRecord.start) : "", "time-cell");
+          createCell(row, firstRecord ? formatTime(firstRecord.end, true, firstRecord.start) : "", "time-cell");
+        } else {
+          addTimeInput(row, employee, date, "start", existingStart, "time-cell");
+          addTimeInput(row, employee, date, "end", existingEnd, "time-cell");
+        }
         const extraCell = createCell(row, formatMinutes(overtime), "overtime-cell");
         extraCell.dataset.employeeId = employee.id;
         extraCell.dataset.date = date;
@@ -455,7 +512,7 @@
     if (!employees.length) {
       const row = document.createElement("tr");
       const message = createCell(row, "Agrega colaboradores para comenzar a llenar esta planilla.", "matrix-empty");
-      message.colSpan = 3 + dates.length * 3;
+      message.colSpan = 4 + dates.length * 3;
       body.appendChild(row);
     }
     table.appendChild(body);
@@ -472,7 +529,7 @@
     const totalsRow = document.createElement("tr");
     totalsRow.className = "grand-total-row";
     const label = document.createElement("th");
-    label.colSpan = 2;
+    label.colSpan = 3;
     label.textContent = "TOTAL GENERAL DEL DÍA";
     totalsRow.appendChild(label);
     createCell(totalsRow, formatMinutes(grandTotal), "sticky-employee-total grand-total-cell");
@@ -524,7 +581,7 @@
     employeeRow.querySelector(".employee-total-cell").textContent = formatMinutes(employeeTotal);
     const otherEmployeeRows = [...byId("schedule-table").querySelectorAll("tbody tr")].filter((row) => row !== employeeRow);
     otherEmployeeRows.forEach((row) => {
-      const employeeIdForRow = row.querySelector(".matrix-time-input")?.dataset.employeeId;
+      const employeeIdForRow = row.querySelector(".overtime-cell[data-employee-id]")?.dataset.employeeId;
       if (!employeeIdForRow) return;
       getPeriodDates().forEach((currentDate) => {
         const cell = byId("schedule-table").querySelector(`.overtime-cell[data-employee-id="${CSS.escape(employeeIdForRow)}"][data-date="${currentDate}"]`);
@@ -573,16 +630,96 @@
     }
   }
 
-  async function deleteEmployee(employee) {
-    if (!window.confirm(`¿Eliminar a ${employee.name}?`)) return;
+  function beginEmployeeEdit(employee) {
+    state.editingEmployeeId = employee.id;
+    byId("employee-name").value = employee.name;
+    byId("employee-role").value = employee.role;
+    byId("employee-submit-button").textContent = "Guardar cambios";
+    byId("cancel-employee-edit").classList.remove("hidden");
+    setMessage(byId("employee-message"), `Editando a ${employee.name}.`);
+    byId("employee-name").focus();
+  }
+
+  function cancelEmployeeEdit() {
+    state.editingEmployeeId = null;
+    byId("employee-form").reset();
+    byId("employee-submit-button").textContent = "Agregar colaborador";
+    byId("cancel-employee-edit").classList.add("hidden");
+    setMessage(byId("employee-message"), "");
+  }
+
+  async function deleteEmployee(employee, deleteHistory) {
+    const employeeRecords = state.records.filter((record) => record.employeeId === employee.id);
+    const action = deleteHistory
+      ? "eliminar al colaborador y borrar permanentemente todos sus horarios"
+      : "eliminar al colaborador conservando sus horarios como historial";
+    if (!window.confirm(`¿Deseas ${action} de ${employee.name}? Esta acción no se puede deshacer.`)) return;
     try {
+      if (deleteHistory) {
+        await removeRecords(employeeRecords);
+      } else if (employeeRecords.length) {
+        await saveHistoricalEmployeeDetails(employee, employeeRecords);
+      }
       await removeItem("employees", employee.id);
       state.employees = state.employees.filter((item) => item.id !== employee.id);
+      if (state.editingEmployeeId === employee.id) cancelEmployeeEdit();
       render();
-      announce("Colaborador eliminado.");
+      announce(deleteHistory
+        ? `Se eliminó a ${employee.name} junto con todo su historial.`
+        : `Se eliminó a ${employee.name}; sus horarios se conservaron en el historial.`);
     } catch (error) {
-      announce(`No se pudo eliminar al colaborador: ${error.message}`, true);
+      const message = firebaseEnabled ? firebaseErrorMessage(error) : error.message;
+      announce(`No se pudo completar la eliminación: ${message}`, true);
     }
+  }
+
+  async function saveHistoricalEmployeeDetails(employee, records) {
+    const updatedRecords = records.map((record) => ({
+      ...record,
+      employeeName: employee.name,
+      employeeRole: employee.role,
+      employeeCreatedAt: employee.createdAt || null
+    }));
+    if (firebaseEnabled) {
+      for (let offset = 0; offset < updatedRecords.length; offset += 400) {
+        const batch = state.database.batch();
+        updatedRecords.slice(offset, offset + 400).forEach((record) => {
+          batch.set(collection("records").doc(record.id), record);
+        });
+        await withFirestoreWriteTimeout(batch.commit());
+      }
+      const updatedById = new Map(updatedRecords.map((record) => [record.id, record]));
+      state.records = state.records.map((record) => updatedById.get(record.id) || record);
+      return;
+    }
+    const updatedById = new Map(updatedRecords.map((record) => [record.id, record]));
+    const nextRecords = state.records.map((record) => updatedById.get(record.id) || record);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+      employees: state.employees,
+      records: nextRecords
+    }));
+    state.records = nextRecords;
+  }
+
+  async function removeRecords(records) {
+    if (!firebaseEnabled) {
+      const deletedIds = new Set(records.map((record) => record.id));
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+        employees: state.employees,
+        records: state.records.filter((record) => !deletedIds.has(record.id))
+      }));
+      state.records = state.records.filter((record) => !deletedIds.has(record.id));
+      return;
+    }
+    for (let offset = 0; offset < records.length; offset += 400) {
+      const batch = state.database.batch();
+      records.slice(offset, offset + 400).forEach((record) => {
+        batch.delete(collection("records").doc(record.id));
+      });
+      await withFirestoreWriteTimeout(batch.commit());
+    }
+    const deletedIds = new Set(records.map((record) => record.id));
+    state.records = state.records.filter((record) => !deletedIds.has(record.id));
   }
 
   async function handleEmployeeSubmit(event) {
@@ -590,19 +727,29 @@
     const name = byId("employee-name").value.trim();
     const role = byId("employee-role").value.trim();
     if (!name || !role) return;
-    const employee = { id: makeId(), name, role, active: true, createdAt: nextEmployeeCreatedAt() };
-    const submitButton = byId("employee-form").querySelector('button[type="submit"]');
+    const existingEmployee = state.employees.find((item) => item.id === state.editingEmployeeId);
+    const employee = existingEmployee
+      ? { ...existingEmployee, name, role }
+      : { id: makeId(), name, role, active: true, createdAt: nextEmployeeCreatedAt() };
+    const submitButton = byId("employee-submit-button");
     submitButton.disabled = true;
     submitButton.textContent = "Guardando...";
     setMessage(byId("employee-message"), "Guardando colaborador...");
     try {
       await saveItem("employees", employee);
-      state.employees = [...state.employees.filter((item) => item.id !== employee.id), employee];
+      const wasEditing = Boolean(existingEmployee);
+      state.employees = wasEditing
+        ? state.employees.map((item) => item.id === employee.id ? employee : item)
+        : [...state.employees, employee];
+      state.editingEmployeeId = null;
       byId("employee-form").reset();
+      byId("cancel-employee-edit").classList.add("hidden");
       render();
-      const savedMessage = firebaseEnabled
-        ? "Colaborador guardado en Firebase y agregado a la planilla."
-        : "Colaborador guardado en este dispositivo y agregado a la planilla.";
+      const savedMessage = wasEditing
+        ? `Cambios de ${employee.name} guardados.`
+        : firebaseEnabled
+          ? "Colaborador guardado en Firebase y agregado a la planilla."
+          : "Colaborador guardado en este dispositivo y agregado a la planilla.";
       setMessage(byId("employee-message"), savedMessage);
       announce(savedMessage);
     } catch (error) {
@@ -613,7 +760,7 @@
       announce(`No se pudo guardar el colaborador: ${message}`, true);
     } finally {
       submitButton.disabled = !state.ready;
-      submitButton.textContent = "Agregar colaborador";
+      submitButton.textContent = state.editingEmployeeId ? "Guardar cambios" : "Agregar colaborador";
     }
   }
 
@@ -788,11 +935,11 @@
 
   function addSpreadsheetWorksheet(workbook, dates, periodLabel) {
     const worksheet = workbook.addWorksheet("Planilla", {
-      views: [{ state: "frozen", xSplit: 3, ySplit: 5, topLeftCell: "D6" }],
+      views: [{ state: "frozen", xSplit: 4, ySplit: 5, topLeftCell: "E6" }],
       pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 },
       properties: { defaultRowHeight: 23 }
     });
-    const columnCount = 3 + dates.length * 3;
+    const columnCount = 4 + dates.length * 3;
     worksheet.mergeCells(1, 1, 1, columnCount);
     worksheet.getCell(1, 1).value = "REPORTE DE HORAS EXTRAS";
     applyCellStyle(worksheet.getCell(1, 1), { fill: "173F36", color: "FFFFFF", bold: true, size: 15 });
@@ -802,22 +949,23 @@
     applyCellStyle(worksheet.getCell(2, 1), { fill: "EAF2ED", color: "36544A", bold: true, size: 11 });
     worksheet.getRow(2).height = 25;
 
-    ["NOMBRES Y APELLIDOS", "CARGO", "TOTAL DE HORAS"].forEach((label, index) => {
+    ["N.º", "NOMBRES Y APELLIDOS", "CARGO", "TOTAL DE HORAS"].forEach((label, index) => {
       const column = index + 1;
       worksheet.mergeCells(4, column, 5, column);
       worksheet.getCell(4, column).value = label;
       applyCellStyle(worksheet.getCell(4, column), {
-        fill: index === 2 ? "A9D49A" : "E6ECE8",
+        fill: index === 3 ? "A9D49A" : "E6ECE8",
         color: "20312C",
         bold: true
       });
     });
-    worksheet.getColumn(1).width = 34;
-    worksheet.getColumn(2).width = 20;
-    worksheet.getColumn(3).width = 15;
+    worksheet.getColumn(1).width = 7;
+    worksheet.getColumn(2).width = 34;
+    worksheet.getColumn(3).width = 20;
+    worksheet.getColumn(4).width = 15;
 
     dates.forEach((date, index) => {
-      const firstColumn = 4 + index * 3;
+      const firstColumn = 5 + index * 3;
       worksheet.mergeCells(4, firstColumn, 4, firstColumn + 2);
       const day = worksheet.getCell(4, firstColumn);
       day.value = `${dayNames[parseDate(date).getDay()]} · ${formatDate(date)}`;
@@ -837,21 +985,29 @@
     worksheet.getRow(4).height = 30;
     worksheet.getRow(5).height = 27;
 
-    const employees = employeesOldestFirst(state.employees);
+    const employees = employeesIncludingHistory().filter((employee) =>
+      !employee.archived || state.records.some((record) => record.employeeId === employee.id && dates.includes(record.date))
+    );
+    const employeeNumbers = new Map(
+      employeesIncludingHistory().map((employee, index) => [employee.id, index + 1])
+    );
     const employeeStartRow = 6;
     let grandTotal = 0;
     employees.forEach((employee, employeeIndex) => {
       const rowNumber = employeeStartRow + employeeIndex;
       const rowFill = employeeIndex % 2 === 0 ? "FFFFFF" : "F7FAF8";
-      const nameCell = worksheet.getCell(rowNumber, 1);
+      const numberCell = worksheet.getCell(rowNumber, 1);
+      numberCell.value = employeeNumbers.get(employee.id);
+      applyCellStyle(numberCell, { fill: rowFill, bold: true });
+      const nameCell = worksheet.getCell(rowNumber, 2);
       nameCell.value = employee.name;
       applyCellStyle(nameCell, { fill: rowFill, bold: true, horizontal: "left" });
-      const roleCell = worksheet.getCell(rowNumber, 2);
+      const roleCell = worksheet.getCell(rowNumber, 3);
       roleCell.value = employee.role;
       applyCellStyle(roleCell, { fill: rowFill, horizontal: "left" });
       let employeeTotal = 0;
       dates.forEach((date, index) => {
-        const column = 4 + index * 3;
+        const column = 5 + index * 3;
         const dayRecords = recordsForDay(employee.id, date);
         const record = dayRecords[0];
         const dayMinutes = minutesForDay(employee.id, date);
@@ -868,17 +1024,17 @@
         setExcelDuration(totalCell, dayMinutes);
       });
       grandTotal += employeeTotal;
-      setExcelDuration(worksheet.getCell(rowNumber, 3), employeeTotal, true, "CDE8C5");
+      setExcelDuration(worksheet.getCell(rowNumber, 4), employeeTotal, true, "CDE8C5");
     });
 
     const totalRowNumber = employeeStartRow + employees.length;
-    worksheet.mergeCells(totalRowNumber, 1, totalRowNumber, 2);
+    worksheet.mergeCells(totalRowNumber, 1, totalRowNumber, 3);
     const totalLabel = worksheet.getCell(totalRowNumber, 1);
     totalLabel.value = "TOTAL GENERAL";
     applyCellStyle(totalLabel, { fill: "173F36", color: "FFFFFF", bold: true, size: 11, horizontal: "left" });
-    setExcelDuration(worksheet.getCell(totalRowNumber, 3), grandTotal, true);
+    setExcelDuration(worksheet.getCell(totalRowNumber, 4), grandTotal, true);
     dates.forEach((date, index) => {
-      const column = 4 + index * 3;
+      const column = 5 + index * 3;
       worksheet.getCell(totalRowNumber, column).value = "";
       applyCellStyle(worksheet.getCell(totalRowNumber, column), { fill: "E8EFEB" });
       worksheet.getCell(totalRowNumber, column + 1).value = "";
@@ -916,24 +1072,27 @@
       workbook.creator = "Horas claras";
       workbook.created = new Date();
       const { employees, grandTotal } = addSpreadsheetWorksheet(workbook, dates, periodLabel);
+      const employeeNumbers = new Map(
+        employeesIncludingHistory().map((employee, index) => [employee.id, index + 1])
+      );
 
       const summary = workbook.addWorksheet("Resumen", {
         views: [{ state: "frozen", ySplit: 4 }],
         pageSetup: { orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 }
       });
-      summary.mergeCells("A1:E1");
+      summary.mergeCells("A1:F1");
       summary.getCell("A1").value = "RESUMEN DE HORAS EXTRAS";
       applyCellStyle(summary.getCell("A1"), { fill: "173F36", color: "FFFFFF", bold: true, size: 15 });
       summary.getRow(1).height = 32;
-      summary.mergeCells("A2:E2");
+      summary.mergeCells("A2:F2");
       summary.getCell("A2").value = periodLabel;
       applyCellStyle(summary.getCell("A2"), { fill: "EAF2ED", color: "36544A", bold: true, size: 11 });
       summary.getCell("A3").value = "TOTAL GENERAL";
       applyCellStyle(summary.getCell("A3"), { fill: "DCEEF6", bold: true });
       setExcelDuration(summary.getCell("B3"), grandTotal, true);
-      summary.mergeCells("B3:E3");
+      summary.mergeCells("B3:F3");
       summary.getCell("B3").alignment = { horizontal: "left", vertical: "middle", indent: 1 };
-      const headers = ["Colaborador", "Cargo", "Días con registro", "Turnos", "Horas extras"];
+      const headers = ["N.º", "Colaborador", "Cargo", "Días con registro", "Turnos", "Horas extras"];
       headers.forEach((label, index) => {
         const cell = summary.getCell(5, index + 1);
         cell.value = label;
@@ -946,15 +1105,15 @@
         );
         const dayCount = new Set(employeeRecords.map((record) => record.date)).size;
         const minutes = employeeRecords.reduce((sum, record) => sum + calculateOvertimeMinutes(record), 0);
-        [employee.name, employee.role, dayCount, employeeRecords.length].forEach((value, column) => {
+        [employeeNumbers.get(employee.id), employee.name, employee.role, dayCount, employeeRecords.length].forEach((value, column) => {
           const cell = summary.getCell(row, column + 1);
           cell.value = value;
-          applyCellStyle(cell, { fill: index % 2 ? "F7FAF8" : "FFFFFF", horizontal: column > 1 ? "center" : "left" });
+          applyCellStyle(cell, { fill: index % 2 ? "F7FAF8" : "FFFFFF", horizontal: column > 2 ? "center" : "left" });
         });
-        setExcelDuration(summary.getCell(row, 5), minutes, true);
+        setExcelDuration(summary.getCell(row, 6), minutes, true);
       });
-      summary.columns = [{ width: 34 }, { width: 24 }, { width: 22 }, { width: 14 }, { width: 18 }];
-      summary.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5 + employees.length, column: 5 } };
+      summary.columns = [{ width: 7 }, { width: 34 }, { width: 24 }, { width: 22 }, { width: 14 }, { width: 18 }];
+      summary.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5 + employees.length, column: 6 } };
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -1102,6 +1261,7 @@
     byId("period-start").addEventListener("change", render);
     byId("period-end").addEventListener("change", render);
     byId("employee-search").addEventListener("input", render);
+    byId("cancel-employee-edit").addEventListener("click", cancelEmployeeEdit);
     byId("save-schedule-button").addEventListener("click", saveSchedule);
     byId("export-button").addEventListener("click", exportWorkbook);
     byId("new-period-button").addEventListener("click", () => {

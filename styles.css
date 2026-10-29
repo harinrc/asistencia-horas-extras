@@ -66,16 +66,20 @@ input:focus, select:focus { border-color: #6aa68b; box-shadow: 0 0 0 3px #17684f
 .stack-form .helper-text { margin-top: -6px; }
 .time-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
 .employee-form { margin-top: 18px; }
+.employee-form-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .employee-add-row { display: flex; align-items: flex-end; gap: 9px; }
 .employee-add-row label { flex: 1; }
 .employee-list { display: grid; gap: 8px; max-height: 178px; margin-top: 11px; overflow-y: auto; }
-.employee-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border: 1px solid #edf1ef; border-radius: 9px; }
+.employee-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 9px 10px; border: 1px solid #edf1ef; border-radius: 9px; }
 .employee-name { min-width: 0; }
 .employee-name strong, .employee-name span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .employee-name strong { font-size: 11px; }
 .employee-name span { margin-top: 3px; color: var(--muted); font-size: 10px; }
 .text-button { padding: 6px 7px; border: 0; border-radius: 6px; background: transparent; color: #a26244; font-size: 10px; font-weight: 700; }
 .text-button:hover { background: #fff2eb; }
+.employee-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 3px; }
+.employee-action-keep-history { color: #426d58; }
+.employee-action-delete-all { color: #a23d3d; }
 .summary-panel, .daily-panel, .records-panel { margin-bottom: 15px; }
 .table-wrap { width: 100%; margin-top: 16px; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; text-align: left; }
@@ -124,14 +128,17 @@ footer { padding: 12px 0 0; color: #9aa49f; font-size: 10px; text-align: center;
 .schedule-table .day-group { min-width: 279px; background: #dceaf3; line-height: 1.4; }
 .schedule-table .day-group span { display: block; font-size: 9px; font-weight: 600; }
 .schedule-table .overtime-header, .schedule-table .overtime-cell { background: #c9e0f0 !important; color: #183e5a; font-weight: 700; }
-.schedule-table .sticky-name, .schedule-table .sticky-role, .schedule-table .sticky-employee-total { position: sticky; background: #fff; }
-.schedule-table .sticky-name { left: 0; z-index: 3; width: 205px; min-width: 205px; max-width: 205px; text-align: left; }
-.schedule-table .sticky-role { left: 205px; z-index: 3; width: 135px; min-width: 135px; max-width: 135px; text-align: left; }
-.schedule-table .sticky-employee-total { left: 340px; z-index: 3; width: 115px; min-width: 115px; max-width: 115px; }
-.schedule-table thead .sticky-name, .schedule-table thead .sticky-role, .schedule-table thead .sticky-employee-total { z-index: 7; background: #e6ece8; text-align: center; white-space: normal; }
-.schedule-table tbody .sticky-name, .schedule-table tbody .sticky-role { overflow: hidden; text-overflow: ellipsis; }
-.schedule-table tbody tr:nth-child(even) .sticky-name, .schedule-table tbody tr:nth-child(even) .sticky-role { background: #f8faf9; }
+.schedule-table .sticky-number, .schedule-table .sticky-name, .schedule-table .sticky-role, .schedule-table .sticky-employee-total { position: sticky; background: #fff; }
+.schedule-table .sticky-number { left: 0; z-index: 3; width: 44px; min-width: 44px; max-width: 44px; }
+.schedule-table .sticky-name { left: 44px; z-index: 3; width: 205px; min-width: 205px; max-width: 205px; text-align: left; }
+.schedule-table .sticky-role { left: 249px; z-index: 3; width: 135px; min-width: 135px; max-width: 135px; text-align: left; }
+.schedule-table .sticky-employee-total { left: 384px; z-index: 3; width: 115px; min-width: 115px; max-width: 115px; }
+.schedule-table thead .sticky-number, .schedule-table thead .sticky-name, .schedule-table thead .sticky-role, .schedule-table thead .sticky-employee-total { z-index: 7; background: #e6ece8; text-align: center; white-space: normal; }
+.schedule-table tbody .sticky-number, .schedule-table tbody .sticky-name, .schedule-table tbody .sticky-role { overflow: hidden; text-overflow: ellipsis; }
+.schedule-table tbody tr:nth-child(even) .sticky-number, .schedule-table tbody tr:nth-child(even) .sticky-name, .schedule-table tbody tr:nth-child(even) .sticky-role { background: #f8faf9; }
+.schedule-table .archived-row > td:not(.employee-total-cell):not(.overtime-cell) { color: #78847f; background: #f2f4f3; }
 .schedule-table .employee-name-cell { font-weight: 600; }
+.schedule-table .employee-number-cell { color: #697771; font-weight: 700; }
 .schedule-table .employee-total-cell { background: #a9d49a; color: #1d3921; font-weight: 700; }
 .schedule-table .matrix-time-input { width: 94px; height: 31px; margin: 0; padding: 0 4px; border: 1px solid transparent; border-radius: 3px; background: transparent; color: #24342f; font-size: 10px; text-align: center; }
 .schedule-table .matrix-time-input:hover { border-color: #b6d2c3; background: #f7fbf8; }
@@ -141,7 +148,7 @@ footer { padding: 12px 0 0; color: #9aa49f; font-size: 10px; text-align: center;
 .schedule-table .inactive-row .employee-total-cell { background: #e6e9e6; }
 .schedule-table .grand-total-row th, .schedule-table .grand-total-row td { position: sticky; z-index: 5; bottom: 0; height: 42px; background: #e9efeb; font-weight: 800; }
 .schedule-table .grand-total-row th:first-child { left: 0; z-index: 8; color: white; background: var(--green-dark); text-align: left; }
-.schedule-table .grand-total-row .sticky-employee-total { left: 340px; background: #a9d49a; }
+.schedule-table .grand-total-row .sticky-employee-total { left: 384px; background: #a9d49a; }
 .schedule-table .grand-total-row .day-total-cell { color: #163f5b; background: #b9d8ea !important; }
 .schedule-table .grand-total-row .footer-empty-cell { background: #eef2ef; }
 .schedule-table .matrix-empty { height: 80px; color: #7d8985; text-align: center; }

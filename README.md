@@ -24,6 +24,8 @@ Los registros locales no se migran automáticamente a Firebase; configura Fireba
 - La planilla agrega una columna automáticamente por cada fecha entre **Desde** y **Hasta**, ambas inclusive. El último rango seleccionado se recuerda en el mismo navegador; los datos siguen guardados en Firestore.
 - El domingo no tiene horario regular: se considera extra todo el tiempo del turno registrado ese día.
 - Los colaboradores nuevos se ordenan del más antiguo al más reciente según su fecha de creación. Los colaboradores agregados antes de incorporar este dato se mantienen arriba en el orden existente, ya que no cuentan con una fecha histórica de creación guardada.
+- La planilla y ambos reportes de Excel incluyen un número de colaborador; el orden sigue la antigüedad y no cambia al aplicar el buscador.
+- Desde el directorio se puede editar el nombre y el cargo, activar/desactivar o eliminar al colaborador. **Eliminar · conservar historial** quita el perfil del directorio pero guarda las jornadas con una copia del nombre y cargo para que sigan apareciendo en los períodos históricos. **Eliminar todo** borra el perfil y todas sus jornadas de forma permanente, después de confirmarlo.
 
 ## Publicar en GitHub Pages
 

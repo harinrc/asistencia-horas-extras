@@ -114,7 +114,10 @@
           <datalist id="employee-name-suggestions"></datalist>
           <label>Cargo<input id="employee-role" type="text" maxlength="80" placeholder="Ej. Conductora" list="employee-role-suggestions" autocomplete="off" required></label>
           <datalist id="employee-role-suggestions"></datalist>
-          <button class="button button-primary" type="submit">Agregar colaborador</button>
+          <div class="employee-form-actions">
+            <button id="employee-submit-button" class="button button-primary" type="submit">Agregar colaborador</button>
+            <button id="cancel-employee-edit" class="button button-secondary hidden" type="button">Cancelar edición</button>
+          </div>
           <p id="employee-message" class="form-message" role="status"></p>
         </form>
         <div id="employee-list" class="employee-list"></div>
