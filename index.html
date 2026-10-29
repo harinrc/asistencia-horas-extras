@@ -86,6 +86,11 @@
             <button id="save-schedule-button" class="button button-primary" type="button">Guardar horarios</button>
           </div>
         </div>
+        <div class="employee-search-row">
+          <label for="employee-search">Buscar colaborador o cargo</label>
+          <input id="employee-search" type="search" placeholder="Escribe un nombre o cargo para filtrar..." autocomplete="off">
+          <span id="employee-search-count" class="search-count"></span>
+        </div>
         <p id="matrix-message" class="form-message" role="status"></p>
         <div class="spreadsheet-wrap">
           <table id="schedule-table" class="schedule-table"></table>
@@ -105,8 +110,10 @@
           </div>
         </div>
         <form id="employee-form" class="employee-form">
-          <label>Nombre y apellidos<input id="employee-name" type="text" maxlength="100" placeholder="Ej. Ana López" required></label>
-          <label>Cargo<input id="employee-role" type="text" maxlength="80" placeholder="Ej. Conductora" required></label>
+          <label>Nombre y apellidos<input id="employee-name" type="text" maxlength="100" placeholder="Ej. Ana López" list="employee-name-suggestions" autocomplete="off" required></label>
+          <datalist id="employee-name-suggestions"></datalist>
+          <label>Cargo<input id="employee-role" type="text" maxlength="80" placeholder="Ej. Conductora" list="employee-role-suggestions" autocomplete="off" required></label>
+          <datalist id="employee-role-suggestions"></datalist>
           <button class="button button-primary" type="submit">Agregar colaborador</button>
           <p id="employee-message" class="form-message" role="status"></p>
         </form>

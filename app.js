@@ -104,6 +104,45 @@
       .map(({ employee }) => employee);
   }
 
+  function normalizeSearchText(value) {
+    return value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("es");
+  }
+
+  function visibleEmployees() {
+    const query = normalizeSearchText(byId("employee-search").value.trim());
+    const employees = employeesOldestFirst(state.employees);
+    if (!query) return employees;
+    return employees.filter((employee) =>
+      normalizeSearchText(`${employee.name} ${employee.role}`).includes(query)
+    );
+  }
+
+  function renderEmployeeSuggestions() {
+    const names = new Set();
+    const roles = new Set();
+    state.employees.forEach((employee) => {
+      names.add(employee.name.trim());
+      roles.add(employee.role.trim());
+    });
+    const nameList = byId("employee-name-suggestions");
+    const roleList = byId("employee-role-suggestions");
+    nameList.replaceChildren();
+    roleList.replaceChildren();
+    [...names].sort((a, b) => a.localeCompare(b, "es")).forEach((value) => {
+      const option = document.createElement("option");
+      option.value = value;
+      nameList.appendChild(option);
+    });
+    [...roles].sort((a, b) => a.localeCompare(b, "es")).forEach((value) => {
+      const option = document.createElement("option");
+      option.value = value;
+      roleList.appendChild(option);
+    });
+  }
+
   function nextEmployeeCreatedAt() {
     const latest = state.employees.reduce((maximum, employee) => {
       const timestamp = employeeCreatedAt(employee);
@@ -287,7 +326,8 @@
   function renderEmployees() {
     const container = byId("employee-list");
     container.replaceChildren();
-    const employees = employeesOldestFirst(state.employees);
+    const employees = visibleEmployees();
+    byId("employee-search-count").textContent = `${employees.length} de ${state.employees.length} colaboradores`;
     employees.forEach((employee) => {
       const item = document.createElement("div");
       item.className = "employee-item";
@@ -308,12 +348,18 @@
       item.append(details, button);
       container.appendChild(item);
     });
-    if (employees.length === 0) {
+    if (state.employees.length === 0) {
       const empty = document.createElement("p");
       empty.className = "helper-text";
       empty.textContent = "Agrega al primer colaborador para comenzar.";
       container.appendChild(empty);
+    } else if (employees.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "helper-text";
+      empty.textContent = "No hay colaboradores que coincidan con la búsqueda.";
+      container.appendChild(empty);
     }
+    renderEmployeeSuggestions();
   }
 
   function addTimeInput(row, employee, date, part, value, className) {
@@ -381,7 +427,7 @@
     table.appendChild(header);
 
     const body = document.createElement("tbody");
-    const employees = employeesOldestFirst(state.employees);
+    const employees = visibleEmployees();
     employees.forEach((employee) => {
       const row = document.createElement("tr");
       if (employee.active === false) row.className = "inactive-row";
@@ -574,7 +620,8 @@
   function readScheduleValues() {
     const dates = getPeriodDates();
     const values = [];
-    for (const employee of state.employees) {
+    const employees = visibleEmployees();
+    for (const employee of employees) {
       for (const date of dates) {
         const start = byId("schedule-table").querySelector(`input[data-employee-id="${CSS.escape(employee.id)}"][data-date="${date}"][data-part="start"]`)?.value || "";
         const end = byId("schedule-table").querySelector(`input[data-employee-id="${CSS.escape(employee.id)}"][data-date="${date}"][data-part="end"]`)?.value || "";
@@ -587,7 +634,7 @@
         if (start && end) values.push({ employeeId: employee.id, date, start, end });
       }
     }
-    return values;
+    return { values, employeeIds: new Set(employees.map((employee) => employee.id)) };
   }
 
   function recordsOverlap(first, second) {
@@ -597,11 +644,15 @@
     return firstInterval.start < secondInterval.end && secondInterval.start < firstInterval.end;
   }
 
-  function buildScheduleChanges(values) {
+  function buildScheduleChanges(values, editableEmployeeIds) {
     const dates = new Set(getPeriodDates());
     const desiredByDay = new Map(values.map((value) => [`${value.employeeId}|${value.date}`, value]));
-    const currentInPeriod = state.records.filter((record) => dates.has(record.date));
-    const preserved = state.records.filter((record) => !dates.has(record.date));
+    const currentInPeriod = state.records.filter((record) =>
+      dates.has(record.date) && editableEmployeeIds.has(record.employeeId)
+    );
+    const preserved = state.records.filter((record) =>
+      !dates.has(record.date) || !editableEmployeeIds.has(record.employeeId)
+    );
     const nextInPeriod = [];
     const updates = [];
     const deletions = [];
@@ -679,8 +730,8 @@
     button.disabled = true;
     setMessage(byId("matrix-message"), "Guardando horarios...");
     try {
-      const values = readScheduleValues();
-      const changes = buildScheduleChanges(values);
+      const { values, employeeIds } = readScheduleValues();
+      const changes = buildScheduleChanges(values, employeeIds);
       await persistScheduleChanges(changes);
       state.records = changes.records;
       render();
@@ -1050,6 +1101,7 @@
     byId("employee-form").addEventListener("submit", handleEmployeeSubmit);
     byId("period-start").addEventListener("change", render);
     byId("period-end").addEventListener("change", render);
+    byId("employee-search").addEventListener("input", render);
     byId("save-schedule-button").addEventListener("click", saveSchedule);
     byId("export-button").addEventListener("click", exportWorkbook);
     byId("new-period-button").addEventListener("click", () => {

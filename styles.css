@@ -109,6 +109,10 @@ footer { padding: 12px 0 0; color: #9aa49f; font-size: 10px; text-align: center;
 .matrix-heading { align-items: flex-end; }
 .matrix-subtitle { margin: 7px 0 0; color: var(--muted); font-size: 11px; }
 .matrix-actions { display: flex; align-items: center; gap: 10px; }
+.employee-search-row { display: grid; grid-template-columns: 190px minmax(180px, 1fr) auto; align-items: center; gap: 11px; max-width: 720px; margin: 17px 0 2px; }
+.employee-search-row label { font-size: 10px; }
+.employee-search-row input { margin-top: 0; }
+.search-count { min-width: 150px; color: var(--muted); font-size: 10px; text-align: right; }
 .total-badge { display: inline-flex; align-items: center; gap: 9px; padding: 9px 12px; border: 1px solid #d5e8dc; border-radius: 9px; background: #edf6f0; color: #64736d; font-size: 10px; white-space: nowrap; }
 .total-badge strong { color: var(--green-dark); font: 800 17px Manrope, sans-serif; }
 .spreadsheet-wrap { max-height: 70vh; margin-top: 12px; overflow: auto; border: 1px solid #9daaa4; border-radius: 7px; background: white; }
@@ -157,6 +161,8 @@ footer { padding: 12px 0 0; color: #9aa49f; font-size: 10px; text-align: center;
   .matrix-panel { padding: 17px 12px 13px; }
   .matrix-heading { align-items: flex-start; flex-direction: column; }
   .matrix-actions { width: 100%; justify-content: space-between; }
+  .employee-search-row { grid-template-columns: 1fr; gap: 5px; }
+  .search-count { min-width: 0; text-align: left; }
   .spreadsheet-wrap { max-height: 65vh; }
   .employee-form { grid-template-columns: 1fr; }
   .employee-form .form-message { grid-column: auto; }

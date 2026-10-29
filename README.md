@@ -108,6 +108,6 @@ Si ya tenías información guardada localmente, expórtala primero y consérvala
 
 ## Planilla y exportación
 
-La planilla principal muestra una fila por colaborador y grupos de columnas para cada fecha del período: entrada, salida y total de horas extras. Edita directamente las celdas de entrada y salida y pulsa **Guardar horarios**. La tabla muestra también el total por colaborador y la suma general diaria y del período.
+La planilla principal muestra una fila por colaborador y grupos de columnas para cada fecha del período: entrada, salida y total de horas extras. Usa el buscador para filtrar por nombre o cargo; esto solo filtra la pantalla y no excluye personal del Excel. Al guardar una planilla filtrada, los horarios de los colaboradores ocultos se conservan sin cambios. Al agregar colaboradores, el formulario sugiere nombres y cargos ya usados. Edita directamente las celdas de entrada y salida y pulsa **Guardar horarios**. La tabla muestra también el total por colaborador y la suma general diaria y del período.
 
 El botón **Exportar a Excel** genera una planilla `.xlsx` con el mismo formato tabular, colores, bordes, encabezados de fecha, totales por día y colaborador, además de una hoja de resumen. Se requiere conexión a internet para cargar la biblioteca de exportación incluida en la página.
