@@ -2,7 +2,7 @@
   "use strict";
 
   const LOCAL_STORAGE_KEY = "horas-claras-data-v1";
-  const appConfig = window.APP_CONFIG?.firebase || {};
+  const appConfig = window.APP_CONFIG?.firebase || window.APP_CONFIG || {};
   const firebaseKeys = ["apiKey", "authDomain", "projectId", "appId"];
   const firebaseEnabled = firebaseKeys.every((key) => Boolean(appConfig[key]));
   const firebasePartiallyConfigured = firebaseKeys.some((key) => Boolean(appConfig[key])) && !firebaseEnabled;
@@ -810,7 +810,7 @@
     byId("auth-panel").classList.add("hidden");
     byId("app-content").classList.remove("hidden");
     byId("sign-out-button").classList.remove("hidden");
-    byId("storage-status").textContent = "Firebase conectado";
+    byId("storage-status").textContent = user.email ? `Firebase · ${user.email}` : "Firebase conectado";
     render();
   }
 

@@ -56,20 +56,28 @@ La aplicación ya incluye el SDK web de Firebase, autenticación por correo/cont
 
 ### 2. Pegar la configuración web
 
-Abre `firebase-config.js` y reemplaza los valores vacíos por los de tu aplicación web. La estructura que la aplicación utiliza es:
+Abre `firebase-config.js` y reemplaza los valores vacíos por los de tu aplicación web. Puedes copiar el objeto de Firebase con las propiedades directamente dentro de `window.APP_CONFIG`, por ejemplo:
 
 ```js
 window.APP_CONFIG = {
-  firebase: {
-    apiKey: "TU_API_KEY",
-    authDomain: "TU_PROYECTO.firebaseapp.com",
-    projectId: "ID_DE_TU_PROYECTO",
-    appId: "TU_APP_ID"
-  }
+  apiKey: "TU_API_KEY",
+  authDomain: "TU_PROYECTO.firebaseapp.com",
+  projectId: "ID_DE_TU_PROYECTO",
+  storageBucket: "TU_PROYECTO.firebasestorage.app",
+  messagingSenderId: "TU_SENDER_ID",
+  appId: "TU_APP_ID"
 };
 ```
 
-Guarda y sube el archivo al mismo repositorio de GitHub con `git add firebase-config.js`, `git commit -m "Configurar Firebase"` y `git push`. GitHub Pages volverá a publicar el sitio; cuando termine, recarga la página. Al detectar la configuración aparecerá el inicio de sesión y cada usuario podrá crear su cuenta.
+La aplicación acepta esta configuración copiada tal cual, así como la forma anidada `window.APP_CONFIG.firebase`. Guarda y sube el archivo al mismo repositorio de GitHub con `git add firebase-config.js`, `git commit -m "Configurar Firebase"` y `git push`. GitHub Pages volverá a publicar el sitio; cuando termine, recarga la página. Al detectar la configuración aparecerá el inicio de sesión.
+
+### Usar el mismo personal en varios dispositivos
+
+1. Crea una sola cuenta con **Crear cuenta** en Firebase Authentication.
+2. En cada dispositivo, abre la URL publicada en GitHub Pages e inicia sesión con **ese mismo correo y contraseña**. El encabezado mostrará el correo de la cuenta activa cuando Firebase esté conectado.
+3. Agrega colaboradores y guarda horarios después de iniciar sesión. Firestore separa los datos por cuenta: si creas o usas otra cuenta, tendrá una lista de personal independiente.
+
+El inicio de sesión ya está incluido en la aplicación; no necesitas crear otro usuario personalizado. Los colaboradores agregados antes de configurar Firebase permanecen en el almacenamiento local de ese dispositivo y no se copian solos. Agrégalos de nuevo después de iniciar sesión en Firebase, o consérvalos en tu exportación.
 
 La configuración de una aplicación web de Firebase está diseñada para estar en el navegador; `apiKey` no es una contraseña ni otorga por sí sola acceso a los registros. En **Google Cloud Console → APIs & Services → Credentials**, restringe la clave de API al dominio `USUARIO.github.io` (y `localhost` durante las pruebas). Nunca pongas contraseñas de cuentas de servicio o claves privadas en este archivo.
 
