@@ -21,6 +21,8 @@ Los registros locales no se migran automáticamente a Firebase; configura Fireba
 - El botón **Iniciar nuevo período** cambia la consulta al día actual; no elimina ni reinicia los registros anteriores.
 - Las fechas del período filtran por la fecha de entrada del turno. Los acumulados por colaborador, día y período se calculan a partir de esos registros.
 - Al abrir la aplicación, el período inicia en la fecha local de hoy. Para consultar más días, selecciona el rango de fechas deseado.
+- La planilla agrega una columna automáticamente por cada fecha entre **Desde** y **Hasta**, ambas inclusive. El último rango seleccionado se recuerda en el mismo navegador; los datos siguen guardados en Firestore.
+- El domingo no tiene horario regular: se considera extra todo el tiempo del turno registrado ese día.
 - Los colaboradores nuevos se ordenan del más antiguo al más reciente según su fecha de creación. Los colaboradores agregados antes de incorporar este dato se mantienen arriba en el orden existente, ya que no cuentan con una fecha histórica de creación guardada.
 
 ## Publicar en GitHub Pages

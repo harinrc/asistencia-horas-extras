@@ -2,6 +2,7 @@
   "use strict";
 
   const LOCAL_STORAGE_KEY = "horas-claras-data-v1";
+  const PERIOD_STORAGE_KEY = "horas-claras-period-v1";
   const appConfig = window.APP_CONFIG?.firebase || window.APP_CONFIG || {};
   const firebaseKeys = ["apiKey", "authDomain", "projectId", "appId"];
   const firebaseEnabled = firebaseKeys.every((key) => Boolean(appConfig[key]));
@@ -119,6 +120,30 @@
       throw new Error("Los datos guardados localmente tienen un formato inválido.");
     }
     return data;
+  }
+
+  function readSavedPeriod() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PERIOD_STORAGE_KEY) || "null");
+      if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved.start) &&
+          /^\d{4}-\d{2}-\d{2}$/.test(saved.end) && saved.start <= saved.end) {
+        return saved;
+      }
+    } catch (error) {
+      console.warn("No se pudo leer el período guardado; se usará la fecha de hoy.", error);
+    }
+    return null;
+  }
+
+  function saveSelectedPeriod() {
+    const start = byId("period-start").value;
+    const end = byId("period-end").value;
+    if (!start || !end || start > end) return;
+    try {
+      localStorage.setItem(PERIOD_STORAGE_KEY, JSON.stringify({ start, end }));
+    } catch (error) {
+      announce(`No se pudo recordar el período en este dispositivo: ${error.message}`, true);
+    }
   }
 
   function collection(name) {
@@ -476,6 +501,7 @@
   }
 
   function render() {
+    saveSelectedPeriod();
     renderEmployees();
     const start = byId("period-start").value;
     const end = byId("period-end").value;
@@ -1018,8 +1044,9 @@
 
   function initialize() {
     const today = localDateString();
-    byId("period-start").value = today;
-    byId("period-end").value = today;
+    const savedPeriod = readSavedPeriod();
+    byId("period-start").value = savedPeriod?.start || today;
+    byId("period-end").value = savedPeriod?.end || today;
     byId("employee-form").addEventListener("submit", handleEmployeeSubmit);
     byId("period-start").addEventListener("change", render);
     byId("period-end").addEventListener("change", render);
@@ -1029,6 +1056,7 @@
       const currentDay = localDateString();
       byId("period-start").value = currentDay;
       byId("period-end").value = currentDay;
+      saveSelectedPeriod();
       render();
       announce("Nuevo período iniciado. El historial anterior se conserva.");
     });
