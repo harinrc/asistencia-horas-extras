@@ -58,10 +58,10 @@ Los registros no aparecen como colecciones raíz: se guardan bajo `users/{UID de
 
 ### 2. Pegar la configuración web
 
-Abre `firebase-config.js` y reemplaza los valores vacíos por los de tu aplicación web. Puedes copiar el objeto de Firebase con las propiedades directamente dentro de `window.APP_CONFIG`, por ejemplo:
+Abre `firebase-config.js` y reemplaza los valores vacíos del objeto `firebaseConfig` por los de tu aplicación web. El archivo publica automáticamente esa configuración en `window.APP_CONFIG.firebase`, que es donde la aplicación la lee:
 
 ```js
-window.APP_CONFIG = {
+const firebaseConfig = {
   apiKey: "TU_API_KEY",
   authDomain: "TU_PROYECTO.firebaseapp.com",
   projectId: "ID_DE_TU_PROYECTO",
@@ -71,7 +71,7 @@ window.APP_CONFIG = {
 };
 ```
 
-La aplicación acepta esta configuración copiada tal cual, así como la forma anidada `window.APP_CONFIG.firebase`. Guarda y sube el archivo al mismo repositorio de GitHub con `git add firebase-config.js`, `git commit -m "Configurar Firebase"` y `git push`. GitHub Pages volverá a publicar el sitio; cuando termine, recarga la página. Al detectar la configuración aparecerá el inicio de sesión.
+No reemplaces la última línea del archivo (`window.APP_CONFIG = { firebase: firebaseConfig };`); esa línea conecta el objeto con la aplicación. Sube el archivo al mismo repositorio de GitHub con `git add firebase-config.js`, `git commit -m "Configurar Firebase"` y `git push`. GitHub Pages volverá a publicar el sitio; cuando termine, recarga la página. Al detectar la configuración aparecerá el inicio de sesión.
 
 ### Usar el mismo personal en varios dispositivos
 
