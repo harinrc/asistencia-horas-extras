@@ -77,6 +77,40 @@
       : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
+  function employeeCreatedAt(employee) {
+    const value = employee.createdAt;
+    if (typeof value === "number") return value;
+    if (value instanceof Date) return value.getTime();
+    if (value && typeof value.toMillis === "function") return value.toMillis();
+    if (typeof value === "string") {
+      const parsed = Date.parse(value);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    return null;
+  }
+
+  function employeesOldestFirst(employees) {
+    return employees
+      .map((employee, index) => ({ employee, index, createdAt: employeeCreatedAt(employee) }))
+      .sort((a, b) => {
+        if (a.createdAt === null && b.createdAt !== null) return -1;
+        if (a.createdAt !== null && b.createdAt === null) return 1;
+        if (a.createdAt !== null && b.createdAt !== null && a.createdAt !== b.createdAt) {
+          return a.createdAt - b.createdAt;
+        }
+        return a.index - b.index;
+      })
+      .map(({ employee }) => employee);
+  }
+
+  function nextEmployeeCreatedAt() {
+    const latest = state.employees.reduce((maximum, employee) => {
+      const timestamp = employeeCreatedAt(employee);
+      return timestamp === null ? maximum : Math.max(maximum, timestamp);
+    }, 0);
+    return Math.max(Date.now(), latest + 1);
+  }
+
   function readLocalData() {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!stored) return { employees: [], records: [] };
@@ -228,7 +262,7 @@
   function renderEmployees() {
     const container = byId("employee-list");
     container.replaceChildren();
-    const employees = [...state.employees].sort((a, b) => a.name.localeCompare(b.name, "es"));
+    const employees = employeesOldestFirst(state.employees);
     employees.forEach((employee) => {
       const item = document.createElement("div");
       item.className = "employee-item";
@@ -322,7 +356,7 @@
     table.appendChild(header);
 
     const body = document.createElement("tbody");
-    const employees = [...state.employees].sort((a, b) => a.name.localeCompare(b.name, "es"));
+    const employees = employeesOldestFirst(state.employees);
     employees.forEach((employee) => {
       const row = document.createElement("tr");
       if (employee.active === false) row.className = "inactive-row";
@@ -383,7 +417,7 @@
     byId("total-overtime").textContent = formatMinutes(grandTotal);
     const start = byId("period-start").value;
     const end = byId("period-end").value;
-    byId("period-caption").textContent = `${formatDate(start)} – ${formatDate(end)} · ${dates.length} días`;
+    byId("period-caption").textContent = `${formatDate(start)} – ${formatDate(end)} · ${dates.length} ${dates.length === 1 ? "día" : "días"}`;
     table.querySelectorAll(".matrix-time-input").forEach((input) => {
       input.addEventListener("change", () => updateDayPreview(input.dataset.employeeId, input.dataset.date));
     });
@@ -484,7 +518,7 @@
     const name = byId("employee-name").value.trim();
     const role = byId("employee-role").value.trim();
     if (!name || !role) return;
-    const employee = { id: makeId(), name, role, active: true };
+    const employee = { id: makeId(), name, role, active: true, createdAt: nextEmployeeCreatedAt() };
     const submitButton = byId("employee-form").querySelector('button[type="submit"]');
     submitButton.disabled = true;
     submitButton.textContent = "Guardando...";
@@ -726,7 +760,7 @@
     worksheet.getRow(4).height = 30;
     worksheet.getRow(5).height = 27;
 
-    const employees = [...state.employees].sort((a, b) => a.name.localeCompare(b.name, "es"));
+    const employees = employeesOldestFirst(state.employees);
     const employeeStartRow = 6;
     let grandTotal = 0;
     employees.forEach((employee, employeeIndex) => {
@@ -984,7 +1018,7 @@
 
   function initialize() {
     const today = localDateString();
-    byId("period-start").value = `${today.slice(0, 7)}-01`;
+    byId("period-start").value = today;
     byId("period-end").value = today;
     byId("employee-form").addEventListener("submit", handleEmployeeSubmit);
     byId("period-start").addEventListener("change", render);
@@ -993,7 +1027,7 @@
     byId("export-button").addEventListener("click", exportWorkbook);
     byId("new-period-button").addEventListener("click", () => {
       const currentDay = localDateString();
-      byId("period-start").value = `${currentDay.slice(0, 7)}-01`;
+      byId("period-start").value = currentDay;
       byId("period-end").value = currentDay;
       render();
       announce("Nuevo período iniciado. El historial anterior se conserva.");

@@ -20,6 +20,8 @@ Los registros locales no se migran automáticamente a Firebase; configura Fireba
 - Se permiten varios registros no traslapados por colaborador y fecha. Una salida anterior a la hora de entrada se interpreta como salida al día siguiente.
 - El botón **Iniciar nuevo período** cambia la consulta al día actual; no elimina ni reinicia los registros anteriores.
 - Las fechas del período filtran por la fecha de entrada del turno. Los acumulados por colaborador, día y período se calculan a partir de esos registros.
+- Al abrir la aplicación, el período inicia en la fecha local de hoy. Para consultar más días, selecciona el rango de fechas deseado.
+- Los colaboradores nuevos se ordenan del más antiguo al más reciente según su fecha de creación. Los colaboradores agregados antes de incorporar este dato se mantienen arriba en el orden existente, ya que no cuentan con una fecha histórica de creación guardada.
 
 ## Publicar en GitHub Pages
 
