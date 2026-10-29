@@ -91,8 +91,18 @@
     return null;
   }
 
+  function uniqueById(items) {
+    const itemsById = new Map();
+    items.forEach((item) => itemsById.set(item.id, item));
+    return [...itemsById.values()];
+  }
+
+  function upsertById(items, item) {
+    return [...items.filter((current) => current.id !== item.id), item];
+  }
+
   function employeesOldestFirst(employees) {
-    return employees
+    return uniqueById(employees)
       .map((employee, index) => ({ employee, index, createdAt: employeeCreatedAt(employee) }))
       .sort((a, b) => {
         if (a.createdAt === null && b.createdAt !== null) return -1;
@@ -113,7 +123,8 @@
   }
 
   function employeesIncludingHistory() {
-    const employeeIds = new Set(state.employees.map((employee) => employee.id));
+    const currentEmployees = uniqueById(state.employees);
+    const employeeIds = new Set(currentEmployees.map((employee) => employee.id));
     const historyById = new Map();
     state.records.forEach((record) => {
       if (employeeIds.has(record.employeeId) || !record.employeeId) return;
@@ -127,7 +138,7 @@
         });
       }
     });
-    return employeesOldestFirst([...state.employees, ...historyById.values()]);
+    return employeesOldestFirst([...currentEmployees, ...historyById.values()]);
   }
 
   function visibleEmployees() {
@@ -215,13 +226,10 @@
       await withFirestoreWriteTimeout(collection(collectionName).doc(item.id).set(item));
       return;
     }
-    const currentItems = state[collectionName];
-    const updatedItems = currentItems.some((current) => current.id === item.id)
-      ? currentItems.map((current) => current.id === item.id ? item : current)
-      : [...currentItems, item];
+    const updatedItems = upsertById(uniqueById(state[collectionName]), item);
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
-      employees: collectionName === "employees" ? updatedItems : state.employees,
-      records: collectionName === "records" ? updatedItems : state.records
+      employees: collectionName === "employees" ? updatedItems : uniqueById(state.employees),
+      records: collectionName === "records" ? updatedItems : uniqueById(state.records)
     }));
   }
 
@@ -348,7 +356,7 @@
     const container = byId("employee-list");
     container.replaceChildren();
     const employees = visibleEmployees();
-    const activeEmployees = state.employees.filter((employee) => !employee.archived).length;
+    const activeEmployees = uniqueById(state.employees).filter((employee) => !employee.archived).length;
     byId("employee-search-count").textContent = `${employees.length} de ${activeEmployees} colaboradores`;
     employees.forEach((employee) => {
       const item = document.createElement("div");
@@ -738,9 +746,7 @@
     try {
       await saveItem("employees", employee);
       const wasEditing = Boolean(existingEmployee);
-      state.employees = wasEditing
-        ? state.employees.map((item) => item.id === employee.id ? employee : item)
-        : [...state.employees, employee];
+      state.employees = upsertById(state.employees, employee);
       state.editingEmployeeId = null;
       byId("employee-form").reset();
       byId("cancel-employee-edit").classList.add("hidden");
@@ -1169,7 +1175,7 @@
     };
 
     state.listeners.push(collection("employees").onSnapshot((snapshot) => {
-      state.employees = snapshot.docs.map((document) => ({ ...document.data(), id: document.id }));
+      state.employees = uniqueById(snapshot.docs.map((document) => ({ ...document.data(), id: document.id })));
       firstEmployeeSnapshot = true;
       showLoadedApp();
     }, handleReadError));
@@ -1188,8 +1194,8 @@
 
   function configureLocalMode() {
     const data = readLocalData();
-    state.employees = data.employees;
-    state.records = data.records;
+    state.employees = uniqueById(data.employees);
+    state.records = uniqueById(data.records);
     state.ready = true;
     byId("storage-status").textContent = "Guardado en este dispositivo";
     render();
