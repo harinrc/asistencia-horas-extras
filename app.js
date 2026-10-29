@@ -32,6 +32,7 @@
   }
 
   function firebaseErrorMessage(error) {
+    const errorCode = (error.code || "").replace(/^firestore\//, "");
     const messages = {
       "auth/email-already-in-use": "Ese correo ya tiene una cuenta. Usa Iniciar sesión.",
       "auth/invalid-credential": "Correo o contraseña incorrectos.",
@@ -47,7 +48,7 @@
       "unavailable": "Firestore no está disponible. Revisa la conexión a internet e inténtalo de nuevo.",
       "failed-precondition": "Firestore no está listo. Comprueba en Firebase Console que la base de datos ya fue creada."
     };
-    return messages[error.code] || error.message || "Error desconocido de Firebase.";
+    return messages[errorCode] || error.message || "Error desconocido de Firebase.";
   }
 
   function announce(text, isError = false) {
@@ -477,8 +478,11 @@
       state.employees = [...state.employees.filter((item) => item.id !== employee.id), employee];
       byId("employee-form").reset();
       render();
-      setMessage(byId("employee-message"), "Colaborador agregado a la planilla.");
-      announce("Colaborador agregado correctamente.");
+      const savedMessage = firebaseEnabled
+        ? "Colaborador guardado en Firebase y agregado a la planilla."
+        : "Colaborador guardado en este dispositivo y agregado a la planilla.";
+      setMessage(byId("employee-message"), savedMessage);
+      announce(savedMessage);
     } catch (error) {
       const message = firebaseEnabled
         ? firebaseErrorMessage(error)
@@ -486,7 +490,7 @@
       setMessage(byId("employee-message"), `No se pudo guardar el colaborador: ${message}`, true);
       announce(`No se pudo guardar el colaborador: ${message}`, true);
     } finally {
-      submitButton.disabled = false;
+      submitButton.disabled = !state.ready;
       submitButton.textContent = "Agregar colaborador";
     }
   }
@@ -607,6 +611,7 @@
       announce("Horarios guardados correctamente.");
     } catch (error) {
       if (firebaseEnabled) {
+        setDataControlsEnabled(false);
         try {
           const snapshot = await collection("records").get();
           state.records = snapshot.docs.map((document) => ({ ...document.data(), id: document.id }));
@@ -841,52 +846,57 @@
   async function loadCloudData(user) {
     state.user = user;
     state.ready = false;
+    byId("auth-panel").classList.add("hidden");
+    byId("app-content").classList.remove("hidden");
+    byId("sign-out-button").classList.remove("hidden");
+    byId("storage-status").textContent = "Cuenta verificada · cargando...";
+    setMessage(byId("matrix-message"), "Cuenta verificada. Cargando colaboradores y horarios desde Firebase...");
+    setDataControlsEnabled(false);
     state.listeners.forEach((unsubscribe) => unsubscribe());
     state.listeners = [];
     byId("storage-status").textContent = "Cuenta verificada · cargando datos...";
     setMessage(byId("auth-message"), "Cargando colaboradores y horarios...");
     let firstEmployeeSnapshot = false;
     let firstRecordSnapshot = false;
-    let hasShownApp = false;
+    let hasLoadedData = false;
 
     const showLoadedApp = () => {
-      if (!firstEmployeeSnapshot || !firstRecordSnapshot || hasShownApp) return;
-      hasShownApp = true;
+      if (!firstEmployeeSnapshot || !firstRecordSnapshot) return;
+      const firstLoad = !hasLoadedData;
+      hasLoadedData = true;
       state.ready = true;
-      byId("auth-panel").classList.add("hidden");
-      byId("app-content").classList.remove("hidden");
-      byId("sign-out-button").classList.remove("hidden");
+      setDataControlsEnabled(true);
       byId("storage-status").textContent = user.email ? `Firebase · ${user.email}` : "Firebase conectado";
+      if (firstLoad) setMessage(byId("matrix-message"), "Conectado a Firebase. Los cambios se guardan en la nube.");
       render();
     };
 
     const handleReadError = (error) => {
       const message = firebaseErrorMessage(error);
       byId("storage-status").textContent = "Error de conexión";
-      if (!hasShownApp) {
-        state.ready = false;
-        byId("auth-panel").classList.remove("hidden");
-        byId("app-content").classList.add("hidden");
-        setMessage(byId("auth-message"), message, true);
-      } else {
-        setMessage(byId("matrix-message"), `Error al sincronizar con Firebase: ${message}`, true);
-        announce(`No se están sincronizando los cambios: ${message}`, true);
-      }
+      state.ready = false;
+      setDataControlsEnabled(false);
+      render();
+      setMessage(byId("matrix-message"), `No se pudieron leer los datos de Firebase: ${message}`, true);
+      announce(`No se están sincronizando los cambios: ${message}`, true);
     };
 
     state.listeners.push(collection("employees").onSnapshot((snapshot) => {
       state.employees = snapshot.docs.map((document) => ({ ...document.data(), id: document.id }));
       firstEmployeeSnapshot = true;
       showLoadedApp();
-      if (hasShownApp) render();
     }, handleReadError));
 
     state.listeners.push(collection("records").onSnapshot((snapshot) => {
       state.records = snapshot.docs.map((document) => ({ ...document.data(), id: document.id }));
       firstRecordSnapshot = true;
       showLoadedApp();
-      if (hasShownApp) render();
     }, handleReadError));
+  }
+
+  function setDataControlsEnabled(enabled) {
+    byId("employee-form").querySelector('button[type="submit"]').disabled = !enabled;
+    byId("save-schedule-button").disabled = !enabled;
   }
 
   function configureLocalMode() {
@@ -940,16 +950,18 @@
     const buttons = [...byId("auth-form").querySelectorAll('button[type="submit"]')];
     buttons.forEach((button) => { button.disabled = true; });
     buttons.find((button) => button.value === action).textContent = "Conectando...";
-    setMessage(byId("auth-message"), "");
+    setMessage(byId("auth-message"), "Verificando la cuenta con Firebase...");
     try {
       if (action === "register") await state.auth.createUserWithEmailAndPassword(email, password);
       else await state.auth.signInWithEmailAndPassword(email, password);
     } catch (error) {
       setMessage(byId("auth-message"), `No se pudo completar el acceso: ${firebaseErrorMessage(error)}`, true);
     } finally {
-      buttons.forEach((button) => { button.disabled = false; });
-      buttons.find((button) => button.value === "login").textContent = "Iniciar sesión";
-      buttons.find((button) => button.value === "register").textContent = "Crear cuenta";
+      if (!state.user) {
+        buttons.forEach((button) => { button.disabled = false; });
+        buttons.find((button) => button.value === "login").textContent = "Iniciar sesión";
+        buttons.find((button) => button.value === "register").textContent = "Crear cuenta";
+      }
     }
   }
 
@@ -984,6 +996,7 @@
       return;
     }
     if (firebaseEnabled) {
+      setDataControlsEnabled(false);
       try {
         configureFirebaseMode();
       } catch (error) {

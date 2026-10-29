@@ -54,6 +54,8 @@ La aplicación ya incluye el SDK web de Firebase, autenticación por correo/cont
 4. En **Authentication → Settings → Authorized domains**, agrega el dominio de GitHub Pages: `USUARIO.github.io` (sin `https://` ni la ruta del repositorio). Agrega también `localhost` si vas a probar localmente.
 5. En **Firestore Database**, crea la base de datos.
 
+Los registros no aparecen como colecciones raíz: se guardan bajo `users/{UID de Firebase}/employees` y `users/{UID de Firebase}/records`. Para consultarlos en la consola, expande primero el documento `users` y el documento con el UID de la cuenta que inició sesión.
+
 ### 2. Pegar la configuración web
 
 Abre `firebase-config.js` y reemplaza los valores vacíos por los de tu aplicación web. Puedes copiar el objeto de Firebase con las propiedades directamente dentro de `window.APP_CONFIG`, por ejemplo:
@@ -93,6 +95,8 @@ También puedes publicar solo las reglas con Firebase CLI si lo tienes instalado
 2. Agrega un colaborador, captura horarios y pulsa **Guardar horarios**.
 3. Recarga la página e inicia sesión otra vez: el colaborador y los horarios deben seguir ahí.
 4. Prueba la misma cuenta en otro navegador o dispositivo. Los datos deben aparecer allí también.
+
+El panel aparece en cuanto Firebase verifica la cuenta; los botones para guardar se habilitan cuando termina de cargar Firestore. El estado superior muestra la cuenta conectada. Al agregar un colaborador, el mensaje confirma si quedó guardado en Firebase o solo en este dispositivo. Si aparece un error de permisos, publica las reglas de Firestore antes de volver a guardar.
 
 Si ya tenías información guardada localmente, expórtala primero y consérvala: no se copia automáticamente a Firestore al conectar Firebase.
 
