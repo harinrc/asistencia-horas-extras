@@ -953,7 +953,7 @@
   function excelOvertimeFormula(startCell, endCell, date, additionalMinutes) {
     const dateFormula = `DATE(${date.slice(0, 4)},${Number(date.slice(5, 7))},${Number(date.slice(8, 10))})`;
     const startDateTime = `${dateFormula}+${startCell}`;
-    const endDateTime = `${dateFormula}+${endCell}+IF(${endCell}<=${startCell},1,0)`;
+    const endDateTime = `${dateFormula}+${endCell}+IF(${endCell}<${startCell},1,0)`;
     const regularOverlap = (dayOffset) => {
       const day = `${dateFormula}+${dayOffset}`;
       const overlap = (regularEnd) =>
@@ -961,7 +961,7 @@
       return `IF(WEEKDAY(${day},2)<=5,${overlap(17)},IF(WEEKDAY(${day},2)=6,${overlap(12)},0))`;
     };
     const additionalFormula = additionalMinutes ? `+${additionalMinutes}/1440` : "";
-    return `IF(AND(${startCell}<>"",${endCell}<>""),MAX(0,(${endDateTime})-(${startDateTime})-${regularOverlap(0)}-${regularOverlap(1)})${additionalFormula},${additionalMinutes}/1440)`;
+    return `IF(AND(${startCell}<>"",${endCell}<>"",${startCell}<>${endCell}),MAX(0,(${endDateTime})-(${startDateTime})-${regularOverlap(0)}-${regularOverlap(1)})${additionalFormula},${additionalMinutes}/1440)`;
   }
 
   function addSpreadsheetWorksheet(workbook, dates, periodLabel) {
