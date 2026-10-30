@@ -3,8 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#123c35">
+  <meta name="theme-color" content="#8f1d2c">
+  <meta name="description" content="Registra jornadas, controla horas extras por período y exporta planillas para tu equipo.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Horas extras">
   <title>Control de horas extras</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/app-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="styles.css">
   <script defer src="firebase-config.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -21,6 +28,7 @@
     </a>
     <div class="topbar-actions">
       <span id="storage-status" class="status-pill">Preparando...</span>
+      <button id="install-app-button" class="button button-secondary hidden" type="button">Instalar app</button>
       <button id="sign-out-button" class="button button-quiet hidden" type="button">Cerrar sesión</button>
     </div>
   </header>

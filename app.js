@@ -8,6 +8,7 @@
   const firebaseEnabled = firebaseKeys.every((key) => Boolean(appConfig[key]));
   const firebasePartiallyConfigured = firebaseKeys.some((key) => Boolean(appConfig[key])) && !firebaseEnabled;
   const FIRESTORE_WRITE_TIMEOUT_MS = 15000;
+  let deferredInstallPrompt = null;
   const state = {
     employees: [],
     records: [],
@@ -944,8 +945,8 @@
     cell.value = { formula, result: minutes / 1440 };
     cell.numFmt = "[h]:mm";
     applyCellStyle(cell, {
-      fill: fill || (isTotal ? "DCEEF6" : "DCEAF3"),
-      color: "163F5B",
+      fill: fill || (isTotal ? "F7E2E5" : "F4DADD"),
+      color: "74232B",
       bold: true
     });
   }
@@ -973,11 +974,11 @@
     const columnCount = 4 + dates.length * 3;
     worksheet.mergeCells(1, 1, 1, 4);
     worksheet.getCell(1, 1).value = "REPORTE DE HORAS EXTRAS";
-    applyCellStyle(worksheet.getCell(1, 1), { fill: "173F36", color: "FFFFFF", bold: true, size: 15, horizontal: "left" });
+    applyCellStyle(worksheet.getCell(1, 1), { fill: "741722", color: "FFFFFF", bold: true, size: 15, horizontal: "left" });
     worksheet.getRow(1).height = 32;
     worksheet.mergeCells(2, 1, 2, 4);
     worksheet.getCell(2, 1).value = periodLabel;
-    applyCellStyle(worksheet.getCell(2, 1), { fill: "EAF2ED", color: "36544A", bold: true, size: 11, horizontal: "left" });
+    applyCellStyle(worksheet.getCell(2, 1), { fill: "F9E9EB", color: "741722", bold: true, size: 11, horizontal: "left" });
     worksheet.getRow(2).height = 25;
     worksheet.mergeCells(3, 1, 3, 4);
     worksheet.getCell(3, 1).value = "Totales del período seleccionado (según la fecha de inicio del turno).";
@@ -989,8 +990,8 @@
       worksheet.mergeCells(4, column, 5, column);
       worksheet.getCell(4, column).value = label;
       applyCellStyle(worksheet.getCell(4, column), {
-        fill: index === 3 ? "A9D49A" : "E6ECE8",
-        color: "20312C",
+        fill: index === 3 ? "E9ABB2" : "F2E7E9",
+        color: "302326",
         bold: true
       });
     });
@@ -1004,13 +1005,13 @@
       worksheet.mergeCells(4, firstColumn, 4, firstColumn + 2);
       const day = worksheet.getCell(4, firstColumn);
       day.value = `${dayNames[parseDate(date).getDay()]} · ${formatDate(date)}`;
-      applyCellStyle(day, { fill: "DCEAF3", color: "20312C", bold: true });
+      applyCellStyle(day, { fill: "F7E4E7", color: "302326", bold: true });
       ["ENTRADA", "SALIDA", "HORAS EXTRAS"].forEach((label, subIndex) => {
         const cell = worksheet.getCell(5, firstColumn + subIndex);
         cell.value = label;
         applyCellStyle(cell, {
-          fill: subIndex === 2 ? "C6DFF0" : "EEF4F7",
-          color: "20312C",
+          fill: subIndex === 2 ? "F4DADD" : "FAF3F4",
+          color: "302326",
           bold: true,
           size: 9
         });
@@ -1077,7 +1078,7 @@
         `SUM(${dailyTotalCells.join(",")})`,
         employeeTotal,
         true,
-        "CDE8C5"
+        "F2D6D9"
       );
     });
 
@@ -1085,7 +1086,7 @@
     worksheet.mergeCells(totalRowNumber, 1, totalRowNumber, 3);
     const totalLabel = worksheet.getCell(totalRowNumber, 1);
     totalLabel.value = "TOTAL GENERAL";
-    applyCellStyle(totalLabel, { fill: "173F36", color: "FFFFFF", bold: true, size: 11, horizontal: "left" });
+    applyCellStyle(totalLabel, { fill: "741722", color: "FFFFFF", bold: true, size: 11, horizontal: "left" });
     const grandTotal = employeeTotals.reduce((sum, total) => sum + total, 0);
     setExcelFormulaDuration(
       worksheet.getCell(totalRowNumber, 4),
@@ -1096,9 +1097,9 @@
     dates.forEach((date, index) => {
       const column = 5 + index * 3;
       worksheet.getCell(totalRowNumber, column).value = "";
-      applyCellStyle(worksheet.getCell(totalRowNumber, column), { fill: "E8EFEB" });
+      applyCellStyle(worksheet.getCell(totalRowNumber, column), { fill: "F8F1F2" });
       worksheet.getCell(totalRowNumber, column + 1).value = "";
-      applyCellStyle(worksheet.getCell(totalRowNumber, column + 1), { fill: "E8EFEB" });
+      applyCellStyle(worksheet.getCell(totalRowNumber, column + 1), { fill: "F8F1F2" });
       const dayMinutes = employees.reduce((sum, employee) => sum + minutesForDay(employee.id, date), 0);
       setExcelFormulaDuration(
         worksheet.getCell(totalRowNumber, column + 2),
@@ -1148,16 +1149,16 @@
       });
       summary.mergeCells("A1:F1");
       summary.getCell("A1").value = "RESUMEN DE HORAS EXTRAS";
-      applyCellStyle(summary.getCell("A1"), { fill: "173F36", color: "FFFFFF", bold: true, size: 15 });
+      applyCellStyle(summary.getCell("A1"), { fill: "741722", color: "FFFFFF", bold: true, size: 15 });
       summary.getRow(1).height = 32;
       summary.mergeCells("A2:F2");
       summary.getCell("A2").value = periodLabel;
-      applyCellStyle(summary.getCell("A2"), { fill: "EAF2ED", color: "36544A", bold: true, size: 11 });
+      applyCellStyle(summary.getCell("A2"), { fill: "F9E9EB", color: "741722", bold: true, size: 11 });
       summary.mergeCells("A4:F4");
       summary.getCell("A4").value = "Totales del período seleccionado (según la fecha de inicio del turno).";
       applyCellStyle(summary.getCell("A4"), { fill: "F7FAF8", color: "53645C", size: 9, horizontal: "left" });
       summary.getCell("A3").value = "TOTAL GENERAL";
-      applyCellStyle(summary.getCell("A3"), { fill: "DCEEF6", bold: true });
+      applyCellStyle(summary.getCell("A3"), { fill: "F7E2E5", bold: true });
       setExcelFormulaDuration(summary.getCell("B3"), `Planilla!D${totalRowNumber}`, grandTotal, true);
       summary.mergeCells("B3:F3");
       summary.getCell("B3").alignment = { horizontal: "left", vertical: "middle", indent: 1 };
@@ -1165,7 +1166,7 @@
       headers.forEach((label, index) => {
         const cell = summary.getCell(5, index + 1);
         cell.value = label;
-        applyCellStyle(cell, { fill: "DCEAF3", bold: true });
+        applyCellStyle(cell, { fill: "F7E4E7", bold: true });
       });
       employees.forEach((employee, index) => {
         const row = 6 + index;
@@ -1346,6 +1347,8 @@
   }
 
   function initialize() {
+    registerServiceWorker();
+    setupInstallPrompt();
     const today = localDateString();
     const savedPeriod = readSavedPeriod();
     byId("period-start").value = savedPeriod?.start || today;
@@ -1401,6 +1404,40 @@
       state.records = [];
       render();
     }
+  }
+
+  function registerServiceWorker() {
+    if (!window.isSecureContext || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("./service-worker.js", { scope: "./" }).catch((error) => {
+      console.error("No se pudo registrar el service worker de la aplicación.", error);
+      announce("No se pudo preparar la instalación o el uso sin conexión. Recarga la página para volver a intentar.", true);
+    });
+  }
+
+  function setupInstallPrompt() {
+    const installButton = byId("install-app-button");
+    window.addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      deferredInstallPrompt = event;
+      installButton.classList.remove("hidden");
+    });
+    installButton.addEventListener("click", async () => {
+      if (!deferredInstallPrompt) return;
+      try {
+        await deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+        installButton.classList.add("hidden");
+      } catch (error) {
+        console.error("No se pudo mostrar el diálogo de instalación de la PWA.", error);
+        announce("No se pudo abrir la instalación. Usa el menú del navegador para instalar la aplicación.", true);
+      }
+    });
+    window.addEventListener("appinstalled", () => {
+      deferredInstallPrompt = null;
+      installButton.classList.add("hidden");
+      announce("Aplicación instalada correctamente.");
+    });
   }
 
   document.addEventListener("DOMContentLoaded", initialize);

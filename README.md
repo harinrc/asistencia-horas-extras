@@ -11,6 +11,14 @@ Aplicación web en español para registrar jornadas por colaborador, consultar a
 Sin configuración de Firebase, los datos quedan guardados en el almacenamiento local del navegador y no se comparten entre dispositivos. No borres los datos del navegador si necesitas conservar ese historial.
 Los registros locales no se migran automáticamente a Firebase; configura Firebase antes de empezar a guardar datos que deban compartirse.
 
+## Instalar como aplicación (PWA)
+
+La aplicación se puede instalar desde GitHub Pages en un dominio HTTPS y conserva el acceso a la interfaz básica cuando no hay conexión. Firebase Authentication, la sincronización con Firestore y la exportación de Excel requieren conexión a internet; si no hay conexión y Firebase no carga, los cambios que se hagan en modo local quedan solo en ese navegador.
+
+- **Chrome o Edge en computadora/Android:** abre el sitio publicado y pulsa **Instalar app** si aparece; también puedes usar la opción de instalación del menú del navegador.
+- **iPhone o iPad:** abre la página en Safari, pulsa **Compartir → Agregar a pantalla de inicio**.
+- Para actualizar una versión ya instalada, conéctate a internet y abre la aplicación. El service worker actualiza los archivos de la interfaz publicados.
+
 ## Reglas de cálculo
 
 - De lunes a viernes, el horario regular es de 8:00 a. m. a 5:00 p. m.
