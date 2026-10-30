@@ -978,6 +978,10 @@
     worksheet.getCell(2, 1).value = periodLabel;
     applyCellStyle(worksheet.getCell(2, 1), { fill: "EAF2ED", color: "36544A", bold: true, size: 11 });
     worksheet.getRow(2).height = 25;
+    worksheet.mergeCells(3, 1, 3, columnCount);
+    worksheet.getCell(3, 1).value = "Los acumulados incluyen únicamente los turnos cuya fecha de inicio está dentro del período indicado.";
+    applyCellStyle(worksheet.getCell(3, 1), { fill: "F7FAF8", color: "53645C", size: 9, horizontal: "left" });
+    worksheet.getRow(3).height = 22;
 
     ["N.º", "NOMBRES Y APELLIDOS", "CARGO", "TOTAL DE HORAS"].forEach((label, index) => {
       const column = index + 1;
@@ -1148,6 +1152,9 @@
       summary.mergeCells("A2:F2");
       summary.getCell("A2").value = periodLabel;
       applyCellStyle(summary.getCell("A2"), { fill: "EAF2ED", color: "36544A", bold: true, size: 11 });
+      summary.mergeCells("A4:F4");
+      summary.getCell("A4").value = "Los acumulados incluyen únicamente los turnos cuya fecha de inicio está dentro del período indicado.";
+      applyCellStyle(summary.getCell("A4"), { fill: "F7FAF8", color: "53645C", size: 9, horizontal: "left" });
       summary.getCell("A3").value = "TOTAL GENERAL";
       applyCellStyle(summary.getCell("A3"), { fill: "DCEEF6", bold: true });
       setExcelFormulaDuration(summary.getCell("B3"), `Planilla!D${totalRowNumber}`, grandTotal, true);
