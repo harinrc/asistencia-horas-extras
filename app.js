@@ -961,7 +961,7 @@
       return `IF(WEEKDAY(${day},2)<=5,${overlap(17)},IF(WEEKDAY(${day},2)=6,${overlap(12)},0))`;
     };
     const additionalFormula = additionalMinutes ? `+${additionalMinutes}/1440` : "";
-    return `IF(AND(${startCell}<>"",${endCell}<>""),MAX(0,${endDateTime}-${startDateTime}-${regularOverlap(0)}-${regularOverlap(1)})${additionalFormula},${additionalMinutes}/1440)`;
+    return `IF(AND(${startCell}<>"",${endCell}<>""),MAX(0,(${endDateTime})-(${startDateTime})-${regularOverlap(0)}-${regularOverlap(1)})${additionalFormula},${additionalMinutes}/1440)`;
   }
 
   function addSpreadsheetWorksheet(workbook, dates, periodLabel) {
