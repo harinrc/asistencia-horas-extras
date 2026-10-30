@@ -952,15 +952,16 @@
 
   function excelOvertimeFormula(startCell, endCell, date, additionalMinutes) {
     const dateFormula = `DATE(${date.slice(0, 4)},${Number(date.slice(5, 7))},${Number(date.slice(8, 10))})`;
-    const endTime = `${endCell}+IF(${endCell}<=${startCell},1,0)`;
+    const startDateTime = `${dateFormula}+${startCell}`;
+    const endDateTime = `${dateFormula}+${endCell}+IF(${endCell}<=${startCell},1,0)`;
     const regularOverlap = (dayOffset) => {
       const day = `${dateFormula}+${dayOffset}`;
       const overlap = (regularEnd) =>
-        `MAX(0,MIN(${endTime},${day}+${regularEnd}/24)-MAX(${startCell},${day}+8/24))`;
+        `MAX(0,MIN(${endDateTime},${day}+${regularEnd}/24)-MAX(${startDateTime},${day}+8/24))`;
       return `IF(WEEKDAY(${day},2)<=5,${overlap(17)},IF(WEEKDAY(${day},2)=6,${overlap(12)},0))`;
     };
     const additionalFormula = additionalMinutes ? `+${additionalMinutes}/1440` : "";
-    return `IF(AND(${startCell}<>"",${endCell}<>""),MAX(0,${endTime}-${startCell}-${regularOverlap(0)}-${regularOverlap(1)})${additionalFormula},${additionalMinutes}/1440)`;
+    return `IF(AND(${startCell}<>"",${endCell}<>""),MAX(0,${endDateTime}-${startDateTime}-${regularOverlap(0)}-${regularOverlap(1)})${additionalFormula},${additionalMinutes}/1440)`;
   }
 
   function addSpreadsheetWorksheet(workbook, dates, periodLabel) {
@@ -970,16 +971,16 @@
       properties: { defaultRowHeight: 23 }
     });
     const columnCount = 4 + dates.length * 3;
-    worksheet.mergeCells(1, 1, 1, columnCount);
+    worksheet.mergeCells(1, 1, 1, 4);
     worksheet.getCell(1, 1).value = "REPORTE DE HORAS EXTRAS";
-    applyCellStyle(worksheet.getCell(1, 1), { fill: "173F36", color: "FFFFFF", bold: true, size: 15 });
+    applyCellStyle(worksheet.getCell(1, 1), { fill: "173F36", color: "FFFFFF", bold: true, size: 15, horizontal: "left" });
     worksheet.getRow(1).height = 32;
-    worksheet.mergeCells(2, 1, 2, columnCount);
+    worksheet.mergeCells(2, 1, 2, 4);
     worksheet.getCell(2, 1).value = periodLabel;
-    applyCellStyle(worksheet.getCell(2, 1), { fill: "EAF2ED", color: "36544A", bold: true, size: 11 });
+    applyCellStyle(worksheet.getCell(2, 1), { fill: "EAF2ED", color: "36544A", bold: true, size: 11, horizontal: "left" });
     worksheet.getRow(2).height = 25;
-    worksheet.mergeCells(3, 1, 3, columnCount);
-    worksheet.getCell(3, 1).value = "Los acumulados incluyen únicamente los turnos cuya fecha de inicio está dentro del período indicado.";
+    worksheet.mergeCells(3, 1, 3, 4);
+    worksheet.getCell(3, 1).value = "Totales del período seleccionado (según la fecha de inicio del turno).";
     applyCellStyle(worksheet.getCell(3, 1), { fill: "F7FAF8", color: "53645C", size: 9, horizontal: "left" });
     worksheet.getRow(3).height = 22;
 
@@ -1153,7 +1154,7 @@
       summary.getCell("A2").value = periodLabel;
       applyCellStyle(summary.getCell("A2"), { fill: "EAF2ED", color: "36544A", bold: true, size: 11 });
       summary.mergeCells("A4:F4");
-      summary.getCell("A4").value = "Los acumulados incluyen únicamente los turnos cuya fecha de inicio está dentro del período indicado.";
+      summary.getCell("A4").value = "Totales del período seleccionado (según la fecha de inicio del turno).";
       applyCellStyle(summary.getCell("A4"), { fill: "F7FAF8", color: "53645C", size: 9, horizontal: "left" });
       summary.getCell("A3").value = "TOTAL GENERAL";
       applyCellStyle(summary.getCell("A3"), { fill: "DCEEF6", bold: true });
