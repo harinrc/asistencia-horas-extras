@@ -25,6 +25,7 @@ La aplicación se puede instalar desde GitHub Pages en un dominio HTTPS y conser
 - El sábado, el horario regular es de 8:00 a. m. a 12:00 p. m.
 - Se suman únicamente los minutos trabajados antes de la entrada regular y después de la salida regular.
 - El domingo no tiene horario regular definido; todo el tiempo del turno se considera extra, menos el descanso elegido (sin descanso, 30 o 60 minutos). Por ejemplo, de 8:00 a. m. a 5:30 p. m. se calculan 9:30, 9:00 o 8:30 horas, respectivamente; de 8:00 a. m. a 5:00 p. m. con 60 minutos de descanso se calculan 8:00 horas.
+- Cualquier fecha se puede marcar como **feriado** desde el encabezado de su día en la planilla. Un feriado aplica a todos los colaboradores de esa fecha: todo el turno cuenta como extra, menos los 0, 30 o 60 minutos de descanso seleccionados. Las fechas feriadas se conservan al cambiar de período y se sincronizan entre dispositivos con Firebase.
 - Se permiten varios registros no traslapados por colaborador y fecha. Una salida anterior a la hora de entrada se interpreta como salida al día siguiente.
 - Los turnos que cruzan medianoche se calculan separando el tiempo trabajado antes y después de medianoche y aplicando el horario regular de cada fecha. El acumulado completo se asigna a la fecha en que inició el turno. Por ejemplo, de lunes 7:30 a. m. a martes 2:00 a. m. suma 9:30 horas extras: 0:30 antes de la jornada, 7:00 después de las 5:00 p. m. y 2:00 del martes.
 - El botón **Iniciar nuevo período** cambia la consulta al día actual; no elimina ni reinicia los registros anteriores.
@@ -33,7 +34,7 @@ La aplicación se puede instalar desde GitHub Pages en un dominio HTTPS y conser
 - La planilla agrega automáticamente una sección de columnas por cada fecha entre **Desde** y **Hasta**, ambas inclusive. El último rango seleccionado se recuerda en el mismo navegador; los datos siguen guardados en Firestore.
 - Los colaboradores nuevos se ordenan del más antiguo al más reciente según su fecha de creación. Los colaboradores agregados antes de incorporar este dato se mantienen arriba en el orden existente, ya que no cuentan con una fecha histórica de creación guardada.
 - La planilla y ambos reportes de Excel incluyen un número de colaborador; el orden sigue la antigüedad y no cambia al aplicar el buscador.
-- La exportación de Excel incluye fórmulas para el cálculo diario de horas extras y los acumulados de la planilla y el resumen. En la columna **Almuerzo (min)** de los domingos se puede elegir 0, 30 o 60 minutos; las fórmulas descuentan esa pausa y actualizan los totales. Si se edita una entrada, salida o descanso exportado, Excel recalcula sus totales; los turnos adicionales del mismo día que no aparecen en los campos visibles se conservan como parte fija del total. El cálculo de Excel usa también la fecha de inicio al comparar horas que cruzan medianoche. El título y el período quedan dentro de las columnas fijas de la planilla para que sigan visibles al desplazarse o cambiar el zoom.
+- La exportación de Excel incluye fórmulas para el cálculo diario de horas extras y los acumulados de la planilla y el resumen. En domingos y fechas marcadas como feriado, la columna **Almuerzo (min)** permite elegir 0, 30 o 60 minutos y las fórmulas descuentan esa pausa. Si se edita una entrada, salida o descanso exportado, Excel recalcula sus totales; los turnos adicionales del mismo día que no aparecen en los campos visibles se conservan como parte fija del total. Las fechas marcadas como feriado se identifican en el encabezado del día exportado. El cálculo de Excel usa también la fecha de inicio al comparar horas que cruzan medianoche. El título y el período quedan dentro de las columnas fijas de la planilla para que sigan visibles al desplazarse o cambiar el zoom.
 - Desde el directorio se puede editar el nombre y el cargo, activar/desactivar o eliminar al colaborador. **Eliminar · conservar historial** quita el perfil del directorio pero guarda las jornadas con una copia del nombre y cargo para que sigan apareciendo en los períodos históricos. **Eliminar todo** borra el perfil y todas sus jornadas de forma permanente, después de confirmarlo.
 
 ## Publicar en GitHub Pages
@@ -69,7 +70,7 @@ La aplicación ya incluye el SDK web de Firebase, autenticación por correo/cont
 4. En **Authentication → Settings → Authorized domains**, agrega el dominio de GitHub Pages: `USUARIO.github.io` (sin `https://` ni la ruta del repositorio). Agrega también `localhost` si vas a probar localmente.
 5. En **Firestore Database**, crea la base de datos.
 
-Los registros no aparecen como colecciones raíz: se guardan bajo `users/{UID de Firebase}/employees` y `users/{UID de Firebase}/records`. Para consultarlos en la consola, expande primero el documento `users` y el documento con el UID de la cuenta que inició sesión.
+Los registros no aparecen como colecciones raíz: se guardan bajo `users/{UID de Firebase}/employees`, `users/{UID de Firebase}/records` y `users/{UID de Firebase}/holidays`. Para consultarlos en la consola, expande primero el documento `users` y el documento con el UID de la cuenta que inició sesión.
 
 ### 2. Pegar la configuración web
 
@@ -100,7 +101,7 @@ La configuración de una aplicación web de Firebase está diseñada para estar 
 
 ### 3. Proteger Firestore
 
-En Firebase Console, abre **Firestore Database → Rules**, reemplaza las reglas con el contenido de `firestore.rules` y pulsa **Publish**. Estas reglas permiten que cada cuenta autenticada lea y modifique únicamente sus propias colecciones de colaboradores y registros. No uses reglas abiertas, como permitir lectura/escritura a todos.
+En Firebase Console, abre **Firestore Database → Rules**, reemplaza las reglas con el contenido de `firestore.rules` y pulsa **Publish**. Estas reglas permiten que cada cuenta autenticada lea y modifique únicamente sus propias colecciones de colaboradores, registros y feriados. No uses reglas abiertas, como permitir lectura/escritura a todos.
 
 También puedes publicar solo las reglas con Firebase CLI si lo tienes instalado y ya vinculaste el proyecto: `firebase deploy --only firestore:rules`. Esto no publica el sitio y no requiere configurar Firebase Hosting.
 
@@ -113,7 +114,7 @@ También puedes publicar solo las reglas con Firebase CLI si lo tienes instalado
 
 El panel aparece en cuanto Firebase verifica la cuenta; los botones para guardar se habilitan cuando termina de cargar Firestore. El estado superior muestra la cuenta conectada. Al agregar un colaborador, el mensaje confirma si quedó guardado en Firebase o solo en este dispositivo. Si aparece un error de permisos, publica las reglas de Firestore antes de volver a guardar.
 
-Si Firestore no confirma una escritura en 15 segundos, la aplicación mostrará un aviso; una operación sin respuesta podría finalizar más tarde, por lo que conviene recargar y verificar la planilla antes de volver a intentarla. En Firestore → Data, busca `users`, abre el documento cuyo ID es el UID de la cuenta en **Authentication → Users** y, dentro de este, la subcolección `employees`. Los registros de horarios aparecen en `records`.
+Si Firestore no confirma una escritura en 15 segundos, la aplicación mostrará un aviso; una operación sin respuesta podría finalizar más tarde, por lo que conviene recargar y verificar la planilla antes de volver a intentarla. En Firestore → Data, busca `users`, abre el documento cuyo ID es el UID de la cuenta en **Authentication → Users** y, dentro de este, las subcolecciones `employees`, `records` y `holidays`.
 
 Si ya tenías información guardada localmente, expórtala primero y consérvala: no se copia automáticamente a Firestore al conectar Firebase.
 

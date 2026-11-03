@@ -3,6 +3,7 @@
 
   const LOCAL_STORAGE_KEY = "horas-claras-data-v1";
   const PERIOD_STORAGE_KEY = "horas-claras-period-v1";
+  const HOLIDAY_STORAGE_KEY = "horas-claras-holidays-v1";
   const appConfig = window.APP_CONFIG?.firebase || window.APP_CONFIG || {};
   const firebaseKeys = ["apiKey", "authDomain", "projectId", "appId"];
   const firebaseEnabled = firebaseKeys.every((key) => Boolean(appConfig[key]));
@@ -12,6 +13,7 @@
   const state = {
     employees: [],
     records: [],
+    holidayDates: [],
     user: null,
     database: null,
     auth: null,
@@ -288,10 +290,13 @@
       const nextDay = new Date(cursor);
       nextDay.setHours(24, 0, 0, 0);
       const segmentEnd = nextDay < end ? nextDay : end;
+      const currentDate = localDateString(cursor);
       const dayOfWeek = cursor.getDay();
       let regularStartHour = null;
       let regularEndHour = null;
-      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+      if (isHoliday(currentDate)) {
+        regularStartHour = null;
+      } else if (dayOfWeek >= 1 && dayOfWeek <= 5) {
         regularStartHour = 8;
         regularEndHour = 17;
       } else if (dayOfWeek === 6) {
@@ -313,10 +318,30 @@
       overtime += segmentMinutes - regularMinutes;
       cursor = segmentEnd;
     }
-    const isSunday = parseDate(record.date).getDay() === 0;
+    const isSpecialDay = isSunday(record.date) || isHoliday(record.date);
     const recordedBreak = Number(record.breakMinutes);
-    const breakMinutes = isSunday && [0, 30, 60].includes(recordedBreak) ? recordedBreak : 0;
+    const breakMinutes = isSpecialDay && [0, 30, 60].includes(recordedBreak) ? recordedBreak : 0;
     return Math.max(0, Math.round(overtime - breakMinutes));
+  }
+
+  function isSunday(date) {
+    return parseDate(date).getDay() === 0;
+  }
+
+  function isHoliday(date) {
+    return state.holidayDates.includes(date);
+  }
+
+  function isSpecialDay(date) {
+    return isSunday(date) || isHoliday(date);
+  }
+
+  function readHolidayDates() {
+    const stored = JSON.parse(localStorage.getItem(HOLIDAY_STORAGE_KEY) || "[]");
+    if (!Array.isArray(stored) || stored.some((date) => typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date))) {
+      throw new Error("Los feriados guardados localmente tienen un formato inválido.");
+    }
+    return [...new Set(stored)];
   }
 
   function formatMinutes(totalMinutes) {
@@ -431,16 +456,16 @@
   function addBreakSelect(row, employee, date, value, className) {
     const cell = document.createElement("td");
     cell.className = className;
-    if (parseDate(date).getDay() !== 0) {
-      cell.textContent = "—";
-      row.appendChild(cell);
-      return;
-    }
+    const placeholder = document.createElement("span");
+    placeholder.className = "break-placeholder";
+    placeholder.textContent = "—";
     const select = document.createElement("select");
     select.className = "matrix-break-select";
     select.dataset.employeeId = employee.id;
     select.dataset.date = date;
     select.dataset.part = "break";
+    select.hidden = !isSpecialDay(date);
+    select.disabled = !isSpecialDay(date);
     select.setAttribute("aria-label", `Descanso de almuerzo de ${employee.name}, ${formatDate(date)}`);
     [
       ["0", "Sin descanso"],
@@ -453,8 +478,80 @@
       select.appendChild(option);
     });
     select.value = String([0, 30, 60].includes(Number(value)) ? Number(value) : 0);
-    cell.appendChild(select);
+    placeholder.hidden = isSpecialDay(date);
+    cell.append(placeholder, select);
     row.appendChild(cell);
+  }
+
+  function refreshSpecialDay(date) {
+    const special = isSpecialDay(date);
+    const header = byId("schedule-table").querySelector(`.day-group[data-date="${date}"]`);
+    const holidayButton = header?.querySelector(".holiday-toggle");
+    if (holidayButton) {
+      holidayButton.textContent = isHoliday(date) ? "FERIADO" : "Marcar feriado";
+      holidayButton.setAttribute("aria-pressed", String(isHoliday(date)));
+      header.classList.toggle("holiday-group", isHoliday(date));
+      header.querySelector(".day-name").textContent =
+        `${dayNames[parseDate(date).getDay()]}${isHoliday(date) ? " · FERIADO" : ""}`;
+    }
+    byId("schedule-table").querySelectorAll(`.break-cell[data-date="${date}"]`).forEach((cell) => {
+      const select = cell.querySelector(".matrix-break-select");
+      const placeholder = cell.querySelector(".break-placeholder");
+      if (!select) {
+        const record = recordsForDay(cell.closest("tr").querySelector(".overtime-cell[data-employee-id]")?.dataset.employeeId, date)[0];
+        cell.textContent = special
+          ? Number(record?.breakMinutes) === 30 ? "30 min" : Number(record?.breakMinutes) === 60 ? "1 hora" : "Sin descanso"
+          : "—";
+        return;
+      }
+      select.hidden = !special;
+      select.disabled = !special;
+      if (placeholder) placeholder.hidden = special;
+    });
+
+    byId("schedule-table").querySelectorAll(`.overtime-cell[data-employee-id][data-date="${date}"]`).forEach((cell) => {
+      const employeeId = cell.dataset.employeeId;
+      const row = cell.closest("tr");
+      const startInput = row.querySelector(`input[data-part="start"][data-date="${date}"]`);
+      const endInput = row.querySelector(`input[data-part="end"][data-date="${date}"]`);
+      if (startInput && endInput) {
+        updateDayPreview(employeeId, date);
+      } else {
+        cell.textContent = formatMinutes(minutesForDay(employeeId, date));
+      }
+    });
+
+    byId("schedule-table").querySelectorAll("tbody .employee-total-cell").forEach((cell) => {
+      const row = cell.closest("tr");
+      const minutes = [...row.querySelectorAll(".overtime-cell[data-employee-id]")]
+        .reduce((sum, overtimeCell) => sum + parseMinutes(overtimeCell.textContent), 0);
+      cell.textContent = formatMinutes(minutes);
+    });
+    getPeriodDates().forEach(updateDailyPreview);
+    const grandTotal = [...byId("schedule-table").querySelectorAll(".day-total-cell")]
+      .reduce((sum, cell) => sum + parseMinutes(cell.textContent), 0);
+    byId("total-overtime").textContent = formatMinutes(grandTotal);
+  }
+
+  function parseMinutes(value) {
+    const [hours, minutes] = value.split(":").map(Number);
+    return hours * 60 + minutes;
+  }
+
+  async function setHoliday(date, holiday) {
+    if (!state.ready) throw new Error("Los datos no están disponibles. Recarga la página y verifica el almacenamiento.");
+    const nextHolidayDates = holiday
+      ? [...new Set([...state.holidayDates, date])]
+      : state.holidayDates.filter((currentDate) => currentDate !== date);
+    if (firebaseEnabled) {
+      const reference = collection("holidays").doc(date);
+      if (holiday) await withFirestoreWriteTimeout(reference.set({ date }));
+      else if (isHoliday(date)) await withFirestoreWriteTimeout(reference.delete());
+    } else {
+      localStorage.setItem(HOLIDAY_STORAGE_KEY, JSON.stringify(nextHolidayDates));
+    }
+    state.holidayDates = nextHolidayDates;
+    refreshSpecialDay(date);
   }
 
   function renderSchedule() {
@@ -488,8 +585,32 @@
       const cell = document.createElement("th");
       cell.colSpan = 4;
       cell.className = "day-group";
+      cell.dataset.date = date;
       const dayName = dayNames[parseDate(date).getDay()];
-      cell.innerHTML = `${dayName}<span>${formatDate(date, { day: "2-digit", month: "2-digit", year: "numeric" })}</span>`;
+      const title = document.createElement("span");
+      title.className = "day-name";
+      title.textContent = `${dayName}${isHoliday(date) ? " · FERIADO" : ""}`;
+      const dateLabel = document.createElement("span");
+      dateLabel.textContent = formatDate(date, { day: "2-digit", month: "2-digit", year: "numeric" });
+      const holidayButton = document.createElement("button");
+      holidayButton.className = "holiday-toggle";
+      holidayButton.type = "button";
+      holidayButton.dataset.date = date;
+      holidayButton.textContent = isHoliday(date) ? "FERIADO" : "Marcar feriado";
+      holidayButton.setAttribute("aria-pressed", String(isHoliday(date)));
+      holidayButton.setAttribute("aria-label", `${isHoliday(date) ? "Quitar feriado" : "Marcar como feriado"}: ${dayName} ${formatDate(date)}`);
+      holidayButton.addEventListener("click", async () => {
+        holidayButton.disabled = true;
+        try {
+          await setHoliday(date, !isHoliday(date));
+        } catch (error) {
+          announce(`No se pudo actualizar el feriado: ${firebaseEnabled ? firebaseErrorMessage(error) : error.message}`, true);
+        } finally {
+          holidayButton.disabled = false;
+        }
+      });
+      cell.append(title, dateLabel, holidayButton);
+      cell.classList.toggle("holiday-group", isHoliday(date));
       groupRow.appendChild(cell);
     });
     header.appendChild(groupRow);
@@ -539,13 +660,15 @@
         if (employee.archived) {
           createCell(row, firstRecord ? formatTime(firstRecord.start) : "", "time-cell");
           createCell(row, firstRecord ? formatTime(firstRecord.end, true, firstRecord.start) : "", "time-cell");
-          createCell(row, parseDate(date).getDay() === 0
+          createCell(row, isSpecialDay(date)
             ? Number(existingBreak) === 30 ? "30 min" : Number(existingBreak) === 60 ? "1 hora" : "Sin descanso"
             : "—", "break-cell");
+          row.lastElementChild.dataset.date = date;
         } else {
           addTimeInput(row, employee, date, "start", existingStart, "time-cell");
           addTimeInput(row, employee, date, "end", existingEnd, "time-cell");
           addBreakSelect(row, employee, date, existingBreak, "break-cell");
+          row.lastElementChild.dataset.date = date;
         }
         const extraCell = createCell(row, formatMinutes(overtime), "overtime-cell");
         extraCell.dataset.employeeId = employee.id;
@@ -851,7 +974,7 @@
           date,
           start,
           end,
-          breakMinutes: parseDate(date).getDay() === 0 ? breakMinutes : 0
+          breakMinutes: isSpecialDay(date) ? breakMinutes : 0
         });
       }
     }
@@ -1035,9 +1158,16 @@
       const day = `${dateFormula}+${dayOffset}`;
       const overlap = (regularEnd) =>
         `MAX(0,MIN(${endDateTime},${day}+${regularEnd}/24)-MAX(${startDateTime},${day}+8/24))`;
-      return `IF(WEEKDAY(${day},2)<=5,${overlap(17)},IF(WEEKDAY(${day},2)=6,${overlap(12)},0))`;
+      const currentDate = new Date(
+        Number(date.slice(0, 4)),
+        Number(date.slice(5, 7)) - 1,
+        Number(date.slice(8, 10)) + dayOffset
+      );
+      return isHoliday(localDateString(currentDate))
+        ? "0"
+        : `IF(WEEKDAY(${day},2)<=5,${overlap(17)},IF(WEEKDAY(${day},2)=6,${overlap(12)},0))`;
     };
-    const breakDeduction = `IF(WEEKDAY(${dateFormula},2)=7,${breakCell}/1440,0)`;
+    const breakDeduction = isSpecialDay(date) ? `${breakCell}/1440` : "0";
     const additionalFormula = additionalMinutes ? `+${additionalMinutes}/1440` : "";
     return `IF(AND(${startCell}<>"",${endCell}<>"",${startCell}<>${endCell}),MAX(0,(${endDateTime})-(${startDateTime})-${regularOverlap(0)}-${regularOverlap(1)}-${breakDeduction})${additionalFormula},${additionalMinutes}/1440)`;
   }
@@ -1057,7 +1187,7 @@
     applyCellStyle(worksheet.getCell(2, 1), { fill: "F9E9EB", color: "741722", bold: true, size: 11, horizontal: "left" });
     worksheet.getRow(2).height = 25;
     worksheet.mergeCells(3, 1, 3, 4);
-    worksheet.getCell(3, 1).value = "Totales del período seleccionado. En domingo, el descanso elegido se descuenta del tiempo extra.";
+    worksheet.getCell(3, 1).value = "En domingos y fechas marcadas como feriado, el descanso elegido se descuenta del tiempo extra.";
     applyCellStyle(worksheet.getCell(3, 1), { fill: "F7FAF8", color: "53645C", size: 9, horizontal: "left" });
     worksheet.getRow(3).height = 22;
 
@@ -1080,7 +1210,7 @@
       const firstColumn = 5 + index * 4;
       worksheet.mergeCells(4, firstColumn, 4, firstColumn + 3);
       const day = worksheet.getCell(4, firstColumn);
-      day.value = `${dayNames[parseDate(date).getDay()]} · ${formatDate(date)}`;
+      day.value = `${dayNames[parseDate(date).getDay()]}${isHoliday(date) ? " · FERIADO" : ""} · ${formatDate(date)}`;
       applyCellStyle(day, { fill: "F7E4E7", color: "302326", bold: true });
       ["ENTRADA", "SALIDA", "ALMUERZO (MIN)", "HORAS EXTRAS"].forEach((label, subIndex) => {
         const cell = worksheet.getCell(5, firstColumn + subIndex);
@@ -1138,11 +1268,11 @@
         if (record) endCell.numFmt = "h:mm AM/PM";
         applyCellStyle(endCell, { fill: rowFill });
         const breakCell = worksheet.getCell(rowNumber, column + 2);
-        const isSunday = parseDate(date).getDay() === 0;
-        breakCell.value = isSunday ? Number(record?.breakMinutes || 0) : null;
+        const isSpecial = isSpecialDay(date);
+        breakCell.value = isSpecial ? Number(record?.breakMinutes || 0) : null;
         breakCell.numFmt = '0 "min"';
         applyCellStyle(breakCell, { fill: rowFill });
-        if (isSunday) {
+        if (isSpecial) {
           breakCell.dataValidation = {
             type: "list",
             allowBlank: false,
@@ -1323,18 +1453,19 @@
     byId("app-content").classList.remove("hidden");
     byId("sign-out-button").classList.remove("hidden");
     byId("storage-status").textContent = "Cuenta verificada · cargando...";
-    setMessage(byId("matrix-message"), "Cuenta verificada. Cargando colaboradores y horarios desde Firebase...");
+    setMessage(byId("matrix-message"), "Cuenta verificada. Cargando colaboradores, horarios y feriados desde Firebase...");
     setDataControlsEnabled(false);
     state.listeners.forEach((unsubscribe) => unsubscribe());
     state.listeners = [];
     byId("storage-status").textContent = "Cuenta verificada · cargando datos...";
-    setMessage(byId("auth-message"), "Cargando colaboradores y horarios...");
+    setMessage(byId("auth-message"), "Cargando colaboradores, horarios y feriados...");
     let firstEmployeeSnapshot = false;
     let firstRecordSnapshot = false;
+    let firstHolidaySnapshot = false;
     let hasLoadedData = false;
 
     const showLoadedApp = () => {
-      if (!firstEmployeeSnapshot || !firstRecordSnapshot) return;
+      if (!firstEmployeeSnapshot || !firstRecordSnapshot || !firstHolidaySnapshot) return;
       const firstLoad = !hasLoadedData;
       hasLoadedData = true;
       state.ready = true;
@@ -1366,6 +1497,19 @@
       firstRecordSnapshot = true;
       showLoadedApp();
     }, handleReadError));
+
+    state.listeners.push(collection("holidays").onSnapshot((snapshot) => {
+      const nextHolidayDates = snapshot.docs.map((document) => document.id);
+      const changedDates = [...new Set([...state.holidayDates, ...nextHolidayDates])]
+        .filter((date) => state.holidayDates.includes(date) !== nextHolidayDates.includes(date));
+      state.holidayDates = nextHolidayDates;
+      firstHolidaySnapshot = true;
+      if (hasLoadedData) {
+        changedDates.forEach(refreshSpecialDay);
+        return;
+      }
+      showLoadedApp();
+    }, handleReadError));
   }
 
   function setDataControlsEnabled(enabled) {
@@ -1377,6 +1521,7 @@
     const data = readLocalData();
     state.employees = uniqueById(data.employees);
     state.records = uniqueById(data.records);
+    state.holidayDates = readHolidayDates();
     state.ready = true;
     byId("storage-status").textContent = "Guardado en este dispositivo";
     render();
@@ -1400,6 +1545,7 @@
         state.ready = false;
         state.employees = [];
         state.records = [];
+        state.holidayDates = [];
         byId("auth-panel").classList.remove("hidden");
         byId("app-content").classList.add("hidden");
         byId("sign-out-button").classList.add("hidden");

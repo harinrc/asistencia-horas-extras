@@ -125,7 +125,10 @@ footer { padding: 12px 0 0; color: #938588; font-size: 10px; text-align: center;
 .schedule-table thead .group-header th { top: 0; }
 .schedule-table thead .subhead-row th { top: 42px; height: 33px; background: #faf3f4; font-size: 8px; }
 .schedule-table .day-group { min-width: 279px; background: #f7e4e7; line-height: 1.4; }
+.schedule-table .day-group.holiday-group { background: #f5dfb6; }
 .schedule-table .day-group span { display: block; font-size: 9px; font-weight: 600; }
+.schedule-table .holiday-toggle { margin-top: 4px; padding: 3px 7px; border: 1px solid #e6c6ca; border-radius: 5px; background: #fff; color: #74232b; font-size: 8px; font-weight: 700; }
+.schedule-table .holiday-group .holiday-toggle { border-color: #d3a34f; background: #fff6e3; color: #754d10; }
 .schedule-table .overtime-header, .schedule-table .overtime-cell { background: #f4dadd !important; color: #74232b; font-weight: 700; }
 .schedule-table .sticky-number, .schedule-table .sticky-name, .schedule-table .sticky-role, .schedule-table .sticky-employee-total { position: sticky; background: #fff; }
 .schedule-table .sticky-number { left: 0; z-index: 3; width: 44px; min-width: 44px; max-width: 44px; }
