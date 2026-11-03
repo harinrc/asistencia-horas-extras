@@ -313,7 +313,10 @@
       overtime += segmentMinutes - regularMinutes;
       cursor = segmentEnd;
     }
-    return Math.round(overtime);
+    const isSunday = parseDate(record.date).getDay() === 0;
+    const recordedBreak = Number(record.breakMinutes);
+    const breakMinutes = isSunday && [0, 30, 60].includes(recordedBreak) ? recordedBreak : 0;
+    return Math.max(0, Math.round(overtime - breakMinutes));
   }
 
   function formatMinutes(totalMinutes) {
@@ -425,6 +428,35 @@
     row.appendChild(cell);
   }
 
+  function addBreakSelect(row, employee, date, value, className) {
+    const cell = document.createElement("td");
+    cell.className = className;
+    if (parseDate(date).getDay() !== 0) {
+      cell.textContent = "—";
+      row.appendChild(cell);
+      return;
+    }
+    const select = document.createElement("select");
+    select.className = "matrix-break-select";
+    select.dataset.employeeId = employee.id;
+    select.dataset.date = date;
+    select.dataset.part = "break";
+    select.setAttribute("aria-label", `Descanso de almuerzo de ${employee.name}, ${formatDate(date)}`);
+    [
+      ["0", "Sin descanso"],
+      ["30", "30 min"],
+      ["60", "1 hora"]
+    ].forEach(([minutes, label]) => {
+      const option = document.createElement("option");
+      option.value = minutes;
+      option.textContent = label;
+      select.appendChild(option);
+    });
+    select.value = String([0, 30, 60].includes(Number(value)) ? Number(value) : 0);
+    cell.appendChild(select);
+    row.appendChild(cell);
+  }
+
   function renderSchedule() {
     const table = byId("schedule-table");
     table.replaceChildren();
@@ -454,7 +486,7 @@
     });
     dates.forEach((date) => {
       const cell = document.createElement("th");
-      cell.colSpan = 3;
+      cell.colSpan = 4;
       cell.className = "day-group";
       const dayName = dayNames[parseDate(date).getDay()];
       cell.innerHTML = `${dayName}<span>${formatDate(date, { day: "2-digit", month: "2-digit", year: "numeric" })}</span>`;
@@ -465,10 +497,10 @@
     const subheadRow = document.createElement("tr");
     subheadRow.className = "subhead-row";
     dates.forEach(() => {
-      ["ENTRADA", "SALIDA", "HORAS EXTRAS"].forEach((label, index) => {
+      ["ENTRADA", "SALIDA", "ALMUERZO", "HORAS EXTRAS"].forEach((label, index) => {
         const cell = document.createElement("th");
         cell.textContent = label;
-        if (index === 2) cell.className = "overtime-header";
+        if (index === 3) cell.className = "overtime-header";
         subheadRow.appendChild(cell);
       });
     });
@@ -501,14 +533,19 @@
         const firstRecord = dayRecords[0];
         const existingStart = firstRecord?.start || "";
         const existingEnd = firstRecord?.end || "";
+        const existingBreak = firstRecord?.breakMinutes || 0;
         const overtime = minutesForDay(employee.id, date);
         employeeTotal += overtime;
         if (employee.archived) {
           createCell(row, firstRecord ? formatTime(firstRecord.start) : "", "time-cell");
           createCell(row, firstRecord ? formatTime(firstRecord.end, true, firstRecord.start) : "", "time-cell");
+          createCell(row, parseDate(date).getDay() === 0
+            ? Number(existingBreak) === 30 ? "30 min" : Number(existingBreak) === 60 ? "1 hora" : "Sin descanso"
+            : "—", "break-cell");
         } else {
           addTimeInput(row, employee, date, "start", existingStart, "time-cell");
           addTimeInput(row, employee, date, "end", existingEnd, "time-cell");
+          addBreakSelect(row, employee, date, existingBreak, "break-cell");
         }
         const extraCell = createCell(row, formatMinutes(overtime), "overtime-cell");
         extraCell.dataset.employeeId = employee.id;
@@ -521,7 +558,7 @@
     if (!employees.length) {
       const row = document.createElement("tr");
       const message = createCell(row, "Agrega colaboradores para comenzar a llenar esta planilla.", "matrix-empty");
-      message.colSpan = 4 + dates.length * 3;
+      message.colSpan = 4 + dates.length * 4;
       body.appendChild(row);
     }
     table.appendChild(body);
@@ -545,6 +582,7 @@
     dates.forEach((date) => {
       createCell(totalsRow, "", "footer-empty-cell");
       createCell(totalsRow, "", "footer-empty-cell");
+      createCell(totalsRow, "", "footer-empty-cell");
       const dailyTotal = createCell(totalsRow, formatMinutes(dailyTotals.get(date)), "overtime-cell day-total-cell");
       dailyTotal.dataset.date = date;
     });
@@ -558,16 +596,25 @@
     table.querySelectorAll(".matrix-time-input").forEach((input) => {
       input.addEventListener("change", () => updateDayPreview(input.dataset.employeeId, input.dataset.date));
     });
+    table.querySelectorAll(".matrix-break-select").forEach((select) => {
+      select.addEventListener("change", () => updateDayPreview(select.dataset.employeeId, select.dataset.date));
+    });
   }
 
   function updateDayPreview(employeeId, date) {
     const startInput = byId("schedule-table").querySelector(`input[data-employee-id="${CSS.escape(employeeId)}"][data-date="${date}"][data-part="start"]`);
     const endInput = byId("schedule-table").querySelector(`input[data-employee-id="${CSS.escape(employeeId)}"][data-date="${date}"][data-part="end"]`);
+    const breakSelect = byId("schedule-table").querySelector(`select[data-employee-id="${CSS.escape(employeeId)}"][data-date="${date}"][data-part="break"]`);
     const extraCell = byId("schedule-table").querySelector(`.overtime-cell[data-employee-id="${CSS.escape(employeeId)}"][data-date="${date}"]`);
     if (!startInput || !endInput || !extraCell || !startInput.value || !endInput.value || startInput.value === endInput.value) {
       if (extraCell) extraCell.textContent = "0:00";
     } else {
-      extraCell.textContent = formatMinutes(calculateOvertimeMinutes({ date, start: startInput.value, end: endInput.value }));
+      extraCell.textContent = formatMinutes(calculateOvertimeMinutes({
+        date,
+        start: startInput.value,
+        end: endInput.value,
+        breakMinutes: Number(breakSelect?.value || 0)
+      }));
     }
     let employeeTotal = 0;
     let grandTotal = 0;
@@ -576,12 +623,23 @@
       const inputEnd = byId("schedule-table").querySelector(`input[data-employee-id="${CSS.escape(employeeId)}"][data-date="${currentDate}"][data-part="end"]`);
       const cell = byId("schedule-table").querySelector(`.overtime-cell[data-employee-id="${CSS.escape(employeeId)}"][data-date="${currentDate}"]`);
       const currentDayRecords = recordsForDay(employeeId, currentDate);
-      const minutes = currentDayRecords.length > 1 &&
+      const currentBreak = Number(byId("schedule-table").querySelector(
+        `select[data-employee-id="${CSS.escape(employeeId)}"][data-date="${currentDate}"][data-part="break"]`
+      )?.value || 0);
+      const visibleRecordMatches = currentDayRecords.length > 0 &&
         inputStart?.value === currentDayRecords[0].start &&
-        inputEnd?.value === currentDayRecords[0].end
+        inputEnd?.value === currentDayRecords[0].end;
+      const minutes = visibleRecordMatches && currentBreak === Number(currentDayRecords[0].breakMinutes || 0)
         ? minutesForDay(employeeId, currentDate)
         : inputStart?.value && inputEnd?.value && inputStart.value !== inputEnd.value
-          ? calculateOvertimeMinutes({ date: currentDate, start: inputStart.value, end: inputEnd.value })
+          ? calculateOvertimeMinutes({
+            date: currentDate,
+            start: inputStart.value,
+            end: inputEnd.value,
+            breakMinutes: currentBreak
+          }) + (visibleRecordMatches
+            ? currentDayRecords.slice(1).reduce((sum, record) => sum + calculateOvertimeMinutes(record), 0)
+            : 0)
           : 0;
       employeeTotal += minutes;
       grandTotal += minutes;
@@ -779,13 +837,22 @@
       for (const date of dates) {
         const start = byId("schedule-table").querySelector(`input[data-employee-id="${CSS.escape(employee.id)}"][data-date="${date}"][data-part="start"]`)?.value || "";
         const end = byId("schedule-table").querySelector(`input[data-employee-id="${CSS.escape(employee.id)}"][data-date="${date}"][data-part="end"]`)?.value || "";
+        const breakMinutes = Number(byId("schedule-table").querySelector(
+          `select[data-employee-id="${CSS.escape(employee.id)}"][data-date="${date}"][data-part="break"]`
+        )?.value || 0);
         if ((start && !end) || (!start && end)) {
           throw new Error(`Completa entrada y salida de ${employee.name} para ${formatDate(date)}.`);
         }
         if (start && end && start === end) {
           throw new Error(`La entrada y salida de ${employee.name} no pueden ser iguales (${formatDate(date)}).`);
         }
-        if (start && end) values.push({ employeeId: employee.id, date, start, end });
+        if (start && end) values.push({
+          employeeId: employee.id,
+          date,
+          start,
+          end,
+          breakMinutes: parseDate(date).getDay() === 0 ? breakMinutes : 0
+        });
       }
     }
     return { values, employeeIds: new Set(employees.map((employee) => employee.id)) };
@@ -822,8 +889,17 @@
         sameDayRecords.forEach((item) => deletions.push(item));
         return;
       }
-      if (sameDayRecords[0].start === desired.start && sameDayRecords[0].end === desired.end) {
+      const sameTimes = sameDayRecords[0].start === desired.start && sameDayRecords[0].end === desired.end;
+      const sameBreak = Number(sameDayRecords[0].breakMinutes || 0) === desired.breakMinutes;
+      if (sameTimes && sameBreak) {
         nextInPeriod.push(...sameDayRecords);
+        desiredByDay.delete(key);
+        return;
+      }
+      if (sameTimes) {
+        const updated = { ...sameDayRecords[0], breakMinutes: desired.breakMinutes };
+        updates.push(updated);
+        nextInPeriod.push(updated, ...sameDayRecords.slice(1));
         desiredByDay.delete(key);
         return;
       }
@@ -951,7 +1027,7 @@
     });
   }
 
-  function excelOvertimeFormula(startCell, endCell, date, additionalMinutes) {
+  function excelOvertimeFormula(startCell, endCell, breakCell, date, additionalMinutes) {
     const dateFormula = `DATE(${date.slice(0, 4)},${Number(date.slice(5, 7))},${Number(date.slice(8, 10))})`;
     const startDateTime = `${dateFormula}+${startCell}`;
     const endDateTime = `${dateFormula}+${endCell}+IF(${endCell}<${startCell},1,0)`;
@@ -961,8 +1037,9 @@
         `MAX(0,MIN(${endDateTime},${day}+${regularEnd}/24)-MAX(${startDateTime},${day}+8/24))`;
       return `IF(WEEKDAY(${day},2)<=5,${overlap(17)},IF(WEEKDAY(${day},2)=6,${overlap(12)},0))`;
     };
+    const breakDeduction = `IF(WEEKDAY(${dateFormula},2)=7,${breakCell}/1440,0)`;
     const additionalFormula = additionalMinutes ? `+${additionalMinutes}/1440` : "";
-    return `IF(AND(${startCell}<>"",${endCell}<>"",${startCell}<>${endCell}),MAX(0,(${endDateTime})-(${startDateTime})-${regularOverlap(0)}-${regularOverlap(1)})${additionalFormula},${additionalMinutes}/1440)`;
+    return `IF(AND(${startCell}<>"",${endCell}<>"",${startCell}<>${endCell}),MAX(0,(${endDateTime})-(${startDateTime})-${regularOverlap(0)}-${regularOverlap(1)}-${breakDeduction})${additionalFormula},${additionalMinutes}/1440)`;
   }
 
   function addSpreadsheetWorksheet(workbook, dates, periodLabel) {
@@ -971,7 +1048,6 @@
       pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 },
       properties: { defaultRowHeight: 23 }
     });
-    const columnCount = 4 + dates.length * 3;
     worksheet.mergeCells(1, 1, 1, 4);
     worksheet.getCell(1, 1).value = "REPORTE DE HORAS EXTRAS";
     applyCellStyle(worksheet.getCell(1, 1), { fill: "741722", color: "FFFFFF", bold: true, size: 15, horizontal: "left" });
@@ -981,7 +1057,7 @@
     applyCellStyle(worksheet.getCell(2, 1), { fill: "F9E9EB", color: "741722", bold: true, size: 11, horizontal: "left" });
     worksheet.getRow(2).height = 25;
     worksheet.mergeCells(3, 1, 3, 4);
-    worksheet.getCell(3, 1).value = "Totales del período seleccionado (según la fecha de inicio del turno).";
+    worksheet.getCell(3, 1).value = "Totales del período seleccionado. En domingo, el descanso elegido se descuenta del tiempo extra.";
     applyCellStyle(worksheet.getCell(3, 1), { fill: "F7FAF8", color: "53645C", size: 9, horizontal: "left" });
     worksheet.getRow(3).height = 22;
 
@@ -1001,21 +1077,21 @@
     worksheet.getColumn(4).width = 15;
 
     dates.forEach((date, index) => {
-      const firstColumn = 5 + index * 3;
-      worksheet.mergeCells(4, firstColumn, 4, firstColumn + 2);
+      const firstColumn = 5 + index * 4;
+      worksheet.mergeCells(4, firstColumn, 4, firstColumn + 3);
       const day = worksheet.getCell(4, firstColumn);
       day.value = `${dayNames[parseDate(date).getDay()]} · ${formatDate(date)}`;
       applyCellStyle(day, { fill: "F7E4E7", color: "302326", bold: true });
-      ["ENTRADA", "SALIDA", "HORAS EXTRAS"].forEach((label, subIndex) => {
+      ["ENTRADA", "SALIDA", "ALMUERZO (MIN)", "HORAS EXTRAS"].forEach((label, subIndex) => {
         const cell = worksheet.getCell(5, firstColumn + subIndex);
         cell.value = label;
         applyCellStyle(cell, {
-          fill: subIndex === 2 ? "F4DADD" : "FAF3F4",
+          fill: subIndex === 3 ? "F4DADD" : "FAF3F4",
           color: "302326",
           bold: true,
           size: 9
         });
-        worksheet.getColumn(firstColumn + subIndex).width = subIndex === 2 ? 14 : 12;
+        worksheet.getColumn(firstColumn + subIndex).width = subIndex === 3 ? 14 : subIndex === 2 ? 15 : 12;
       });
     });
     worksheet.getRow(4).height = 30;
@@ -1044,7 +1120,7 @@
       let employeeTotal = 0;
       const dailyTotalCells = [];
       dates.forEach((date, index) => {
-        const column = 5 + index * 3;
+        const column = 5 + index * 4;
         const dayRecords = recordsForDay(employee.id, date);
         const record = dayRecords[0];
         const dayMinutes = minutesForDay(employee.id, date);
@@ -1061,16 +1137,31 @@
         endCell.value = record ? excelTime(record.end) : null;
         if (record) endCell.numFmt = "h:mm AM/PM";
         applyCellStyle(endCell, { fill: rowFill });
-        const totalCell = worksheet.getCell(rowNumber, column + 2);
+        const breakCell = worksheet.getCell(rowNumber, column + 2);
+        const isSunday = parseDate(date).getDay() === 0;
+        breakCell.value = isSunday ? Number(record?.breakMinutes || 0) : null;
+        breakCell.numFmt = '0 "min"';
+        applyCellStyle(breakCell, { fill: rowFill });
+        if (isSunday) {
+          breakCell.dataValidation = {
+            type: "list",
+            allowBlank: false,
+            formulae: ['"0,30,60"'],
+            showErrorMessage: true,
+            errorTitle: "Descanso no válido",
+            error: "Elige 0, 30 o 60 minutos."
+          };
+        }
+        const overtimeCell = worksheet.getCell(rowNumber, column + 3);
         setExcelFormulaDuration(
-          totalCell,
-          excelOvertimeFormula(startAddress, endAddress, date, additionalMinutes),
+          overtimeCell,
+          excelOvertimeFormula(startAddress, endAddress, breakCell.address, date, additionalMinutes),
           dayMinutes
         );
         if (dayRecords.length > 1) {
-          totalCell.note = `Incluye ${dayRecords.length - 1} turno(s) adicional(es) guardado(s), además del horario visible.`;
+          overtimeCell.note = `Incluye ${dayRecords.length - 1} turno(s) adicional(es) guardado(s), además del horario visible.`;
         }
-        dailyTotalCells.push(totalCell.address);
+        dailyTotalCells.push(overtimeCell.address);
       });
       employeeTotals.push(employeeTotal);
       setExcelFormulaDuration(
@@ -1095,16 +1186,18 @@
       true
     );
     dates.forEach((date, index) => {
-      const column = 5 + index * 3;
+      const column = 5 + index * 4;
       worksheet.getCell(totalRowNumber, column).value = "";
       applyCellStyle(worksheet.getCell(totalRowNumber, column), { fill: "F8F1F2" });
       worksheet.getCell(totalRowNumber, column + 1).value = "";
       applyCellStyle(worksheet.getCell(totalRowNumber, column + 1), { fill: "F8F1F2" });
+      worksheet.getCell(totalRowNumber, column + 2).value = "";
+      applyCellStyle(worksheet.getCell(totalRowNumber, column + 2), { fill: "F8F1F2" });
       const dayMinutes = employees.reduce((sum, employee) => sum + minutesForDay(employee.id, date), 0);
       setExcelFormulaDuration(
-        worksheet.getCell(totalRowNumber, column + 2),
+        worksheet.getCell(totalRowNumber, column + 3),
         employees.length
-          ? `SUM(${employees.map((_, employeeIndex) => worksheet.getCell(employeeStartRow + employeeIndex, column + 2).address).join(",")})`
+          ? `SUM(${employees.map((_, employeeIndex) => worksheet.getCell(employeeStartRow + employeeIndex, column + 3).address).join(",")})`
           : "0",
         dayMinutes,
         true
@@ -1181,8 +1274,8 @@
         dates.forEach((date, dateIndex) => {
           const recordsForCurrentDay = recordsForDay(employee.id, date);
           const additionalTurns = Math.max(0, recordsForCurrentDay.length - 1);
-          const startAddress = `Planilla!${summaryColumnName(5 + dateIndex * 3)}${planillaRow}`;
-          const endAddress = `Planilla!${summaryColumnName(6 + dateIndex * 3)}${planillaRow}`;
+          const startAddress = `Planilla!${summaryColumnName(5 + dateIndex * 4)}${planillaRow}`;
+          const endAddress = `Planilla!${summaryColumnName(6 + dateIndex * 4)}${planillaRow}`;
           dayCountTerms.push(
             `IF(OR(${startAddress}<>"",${endAddress}<>"",${additionalTurns > 0 ? "TRUE" : "FALSE"}),1,0)`
           );

@@ -142,6 +142,7 @@ footer { padding: 12px 0 0; color: #938588; font-size: 10px; text-align: center;
 .schedule-table .matrix-time-input { width: 94px; height: 31px; margin: 0; padding: 0 4px; border: 1px solid transparent; border-radius: 3px; background: transparent; color: #24342f; font-size: 10px; text-align: center; }
 .schedule-table .matrix-time-input:hover { border-color: #dfb3b9; background: #fffafb; }
 .schedule-table .matrix-time-input:focus { border-color: #bd5968; background: #fff; box-shadow: 0 0 0 2px #a3213218; }
+.schedule-table .matrix-break-select { width: 88px; height: 31px; margin: 0; padding: 0 2px; border: 1px solid #eadbdd; border-radius: 3px; background: #fffafb; color: #24342f; font-size: 9px; }
 .schedule-table .time-cell { background: #fff; }
 .schedule-table .inactive-row > td { color: #929b97; }
 .schedule-table .inactive-row .employee-total-cell { background: #eae5e6; }

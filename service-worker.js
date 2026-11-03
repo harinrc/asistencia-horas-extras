@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "horas-extras-pwa-";
-const CACHE_NAME = `${CACHE_PREFIX}v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v2`;
 const APP_SHELL = [
   "./",
   "./index.html",

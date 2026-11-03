@@ -62,7 +62,7 @@
         </div>
         <div class="schedule-note">
           <span class="schedule-icon" aria-hidden="true">◷</span>
-          <span><strong>Horario regular</strong><br>L–V 8:00 a. m.–5:00 p. m. · Sáb. 8:00 a. m.–12:00 p. m.<br>Domingo: todo el turno cuenta como extra.</span>
+          <span><strong>Horario regular</strong><br>L–V 8:00 a. m.–5:00 p. m. · Sáb. 8:00 a. m.–12:00 p. m.<br>Domingo: todo el turno cuenta como extra; el descanso se elige por turno.</span>
         </div>
       </section>
 
@@ -79,7 +79,7 @@
           <label>Hasta<input id="period-end" type="date"></label>
           <button id="export-button" class="button button-primary" type="button">Exportar a Excel</button>
         </div>
-        <p class="helper-text">La planilla crea una columna por cada día entre las fechas, inclusive. Al recargar, vuelve a mostrar el último rango consultado en este dispositivo. El historial de Firebase se conserva; cambiar el período solo filtra lo que ves.</p>
+        <p class="helper-text">La planilla crea una sección de columnas por cada día entre las fechas, inclusive. Al recargar, vuelve a mostrar el último rango consultado en este dispositivo. El historial de Firebase se conserva; cambiar el período solo filtra lo que ves.</p>
       </section>
 
       <section class="panel matrix-panel" aria-labelledby="matrix-heading">
@@ -87,7 +87,8 @@
           <div>
             <p class="eyebrow">Planilla del período</p>
             <h2 id="matrix-heading">Horario por colaborador y día</h2>
-            <p class="matrix-subtitle">Captura las entradas y salidas directamente en la tabla. El total de horas extras se calcula automáticamente.</p>
+            <p class="matrix-subtitle">Captura las entradas y salidas; en domingo también puedes elegir si hubo 0, 30 o 60 minutos de descanso. El total se actualiza automáticamente.</p>
+            <p class="helper-text">Ejemplo domingo: 8:00 a. m.–5:30 p. m. = 9:30 sin descanso, 9:00 con 30 min o 8:30 con 1 hora. De 8:00 a. m.–5:00 p. m. con 1 hora = 8:00.</p>
           </div>
           <div class="matrix-actions">
             <span class="total-badge">Total del período <strong id="total-overtime">0:00</strong></span>
